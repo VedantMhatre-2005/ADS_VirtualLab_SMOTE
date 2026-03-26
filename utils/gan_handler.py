@@ -102,7 +102,7 @@ class SimpleGAN:
         y_majority = y_train[y_train == 0]
         y_minority = y_train[y_train == 1]
         
-        # Normalize minority class data
+        # Normalize minority class data to [0, 1]
         X_minority_scaled = self.scaler.fit_transform(X_minority)
         
         # Build and compile networks
@@ -130,40 +130,57 @@ class SimpleGAN:
             loss='binary_crossentropy'
         )
         
-        # Train GAN
+        # Freeze discriminator weights during generator training
+        self.discriminator.trainable = False
+        
+        # Train GAN with improved training loop
         n_samples_to_generate = len(X_majority) - len(X_minority)
+        batch_size = min(self.batch_size, len(X_minority_scaled))
         
         for epoch in range(self.epochs):
-            # Train discriminator
-            idx = np.random.randint(0, len(X_minority_scaled), self.batch_size)
+            # Train discriminator on real and fake data
+            idx = np.random.randint(0, len(X_minority_scaled), size=min(batch_size, len(X_minority_scaled)))
             real_data = X_minority_scaled[idx]
             
-            noise = np.random.normal(0, 1, (self.batch_size, self.latent_dim))
+            noise = np.random.normal(0, 1, (len(idx), self.latent_dim))
             fake_data = self.generator.predict(noise, verbose=0)
             
-            # Combine real and fake data
-            real_labels = np.ones((self.batch_size, 1))
-            fake_labels = np.zeros((self.batch_size, 1))
+            # Create labels with noise (label smoothing to improve training)
+            real_labels = np.ones((len(idx), 1)) * 0.9  # Smooth labels
+            fake_labels = np.zeros((len(idx), 1)) + 0.1
             
-            self.discriminator.train_on_batch(real_data, real_labels)
-            self.discriminator.train_on_batch(fake_data, fake_labels)
+            # Train discriminator
+            self.discriminator.trainable = True
+            d_loss_real = self.discriminator.train_on_batch(real_data, real_labels)
+            d_loss_fake = self.discriminator.train_on_batch(fake_data, fake_labels)
             
             # Train generator
-            noise = np.random.normal(0, 1, (self.batch_size, self.latent_dim))
-            valid_labels = np.ones((self.batch_size, 1))
-            self.gan.train_on_batch(noise, valid_labels)
+            self.discriminator.trainable = False
+            noise = np.random.normal(0, 1, (batch_size, self.latent_dim))
+            valid_labels = np.ones((batch_size, 1))
+            g_loss = self.gan.train_on_batch(noise, valid_labels)
             
             if verbose and (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch + 1}/{self.epochs}")
+                print(f"Epoch {epoch + 1}/{self.epochs} | D Loss: {(d_loss_real + d_loss_fake)/2:.4f} | G Loss: {g_loss:.4f}")
         
-        # Generate synthetic samples
-        noise = np.random.normal(0, 1, (n_samples_to_generate, self.latent_dim))
-        synthetic_data = self.generator.predict(noise, verbose=0)
-        synthetic_data = self.scaler.inverse_transform(synthetic_data)
+        # Generate synthetic samples with better diversity
+        noise = np.random.normal(0, 1, (int(n_samples_to_generate * 1.2), self.latent_dim))
+        synthetic_data_scaled = self.generator.predict(noise, verbose=0)
+        
+        # Unscale to original feature ranges
+        synthetic_data = self.scaler.inverse_transform(synthetic_data_scaled)
+        
+        # Clip to valid ranges if necessary
+        synthetic_data = np.clip(synthetic_data, 
+                                np.min(X_minority, axis=0) * 0.9,
+                                np.max(X_minority, axis=0) * 1.1)
+        
+        # Take only the required number of samples
+        synthetic_data = synthetic_data[:int(n_samples_to_generate)]
         
         # Combine all data
         X_train_gan = np.vstack([X_train, synthetic_data])
-        y_train_gan = np.hstack([y_train, np.ones(n_samples_to_generate, dtype=int)])
+        y_train_gan = np.hstack([y_train, np.ones(len(synthetic_data), dtype=int)])
         
         # Convert back to DataFrame if input was DataFrame
         if isinstance(X_train, pd.DataFrame):
@@ -200,25 +217,17 @@ class GANHandler:
     
     def __init__(self, epochs=50, random_state=42):
         """Initialize GAN handler."""
-        if TF_AVAILABLE:
-            self.gan = SimpleGAN(epochs=epochs, random_state=random_state)
-        else:
-            self.gan = None
+        if not TF_AVAILABLE:
+            raise ImportError("TensorFlow is required for GAN functionality. Install it with: pip install tensorflow>=2.13.0,<2.14.0")
+        
+        self.gan = SimpleGAN(epochs=epochs, random_state=random_state)
+        self.epochs = epochs
+        self.random_state = random_state
     
     def apply_gan(self, X_train, y_train, verbose=False):
-        """Apply GAN balancing."""
-        if not TF_AVAILABLE or self.gan is None:
-            # Fallback: use SMOTE if GAN is not available
-            from imblearn.over_sampling import SMOTE
-            smote = SMOTE(random_state=42)
-            X_balanced, y_balanced = smote.fit_resample(X_train, y_train)
-            
-            if isinstance(X_train, pd.DataFrame):
-                X_balanced = pd.DataFrame(X_balanced, columns=X_train.columns)
-            if isinstance(y_train, pd.Series):
-                y_balanced = pd.Series(y_balanced, name=y_train.name)
-            
-            return X_balanced, y_balanced, None
+        """Apply GAN balancing - uses actual GAN, not SMOTE."""
+        if self.gan is None:
+            raise RuntimeError("GAN model not initialized properly")
         
         X_gan, y_gan = self.gan.apply_gan(X_train, y_train, verbose=verbose)
         return X_gan, y_gan, None

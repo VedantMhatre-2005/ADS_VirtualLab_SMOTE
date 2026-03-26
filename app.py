@@ -1300,6 +1300,10 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
         with st.spinner("Training GAN models..."):
             try:
                 from utils.gan_handler import GANHandler
+                import tensorflow as tf
+                
+                # Debug: Check if TensorFlow is available
+                st.session_state.tf_version = tf.__version__
                 
                 # Train GAN and get results
                 gan_handler = GANHandler(epochs=30, random_state=42)
@@ -1327,8 +1331,17 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
                 st.session_state.gan_trained = True
                 
                 st.success("✅ GAN training complete!")
+                
+                # Show debug info
+                if "tf_version" in st.session_state:
+                    st.info(f"🔧 TensorFlow version: {st.session_state.tf_version}")
+            except ImportError as e:
+                st.error(f"❌ GAN Import Error: TensorFlow may not be properly installed.\n\nDetails: {str(e)}\n\nPlease ensure tensorflow==2.13.0 is installed.")
             except Exception as e:
+                import traceback
                 st.error(f"❌ GAN training failed: {str(e)}")
+                with st.expander("🔍 Error Details"):
+                    st.code(traceback.format_exc())
         
         if st.session_state.get('gan_trained', False):
             st.subheader("🎨 GAN Model Performance")
