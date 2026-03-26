@@ -8,9 +8,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-def load_imbalanced_dataset(dataset_name, random_state=42):
+def load_imbalanced_dataset(dataset_name, random_state=42, data_dir="."):
     """
-    Load one of four imbalanced datasets.
+    Load one of four imbalanced datasets from CSV files.
     
     Parameters:
     -----------
@@ -18,79 +18,71 @@ def load_imbalanced_dataset(dataset_name, random_state=42):
         Name of the dataset to load
     random_state : int
         Random state for reproducibility
+    data_dir : str
+        Directory where CSV files are located
         
     Returns:
     --------
     X, y : arrays
         Features and target variable
     """
+    import os
     
-    if dataset_name == "Credit Card Fraud":
-        # Simulated credit card fraud dataset
-        n_samples = 10000
-        X, y = make_classification(
-            n_samples=n_samples,
-            n_features=30,
-            n_informative=25,
-            n_redundant=5,
-            weights=[0.98, 0.02],  # 98% majority, 2% minority
-            random_state=random_state,
-            flip_y=0.01
-        )
-        feature_names = [f"Feature_{i}" for i in range(X.shape[1])]
-        X = pd.DataFrame(X, columns=feature_names)
-        y = pd.Series(y, name="Fraud")
-        
-    elif dataset_name == "Disease Detection":
-        # Simulated medical dataset
-        n_samples = 8000
-        X, y = make_classification(
-            n_samples=n_samples,
-            n_features=20,
-            n_informative=15,
-            n_redundant=5,
-            weights=[0.95, 0.05],  # 95% healthy, 5% diseased
-            random_state=random_state,
-            flip_y=0.02
-        )
-        feature_names = [f"Biomarker_{i}" for i in range(X.shape[1])]
-        X = pd.DataFrame(X, columns=feature_names)
-        y = pd.Series(y, name="Disease")
-        
-    elif dataset_name == "Network Intrusion":
-        # Simulated network intrusion dataset
-        n_samples = 12000
-        X, y = make_classification(
-            n_samples=n_samples,
-            n_features=25,
-            n_informative=20,
-            n_redundant=5,
-            weights=[0.96, 0.04],  # 96% normal, 4% intrusion
-            random_state=random_state,
-            flip_y=0.015
-        )
-        feature_names = [f"Feature_{i}" for i in range(X.shape[1])]
-        X = pd.DataFrame(X, columns=feature_names)
-        y = pd.Series(y, name="Intrusion")
-        
-    elif dataset_name == "Rare Event Prediction":
-        # Simulated rare event dataset
-        n_samples = 9000
-        X, y = make_classification(
-            n_samples=n_samples,
-            n_features=18,
-            n_informative=14,
-            n_redundant=4,
-            weights=[0.92, 0.08],  # 92% normal, 8% rare event
-            random_state=random_state,
-            flip_y=0.01
-        )
-        feature_names = [f"Feature_{i}" for i in range(X.shape[1])]
-        X = pd.DataFrame(X, columns=feature_names)
-        y = pd.Series(y, name="Event")
+    dataset_mapping = {
+        "Attrition": {
+            "file": "Attrition_Dataset.csv",
+            "target": "Attrition",
+            "target_map": {"Yes": 1, "No": 0}
+        },
+        "Bank": {
+            "file": "Bank_Dataset.csv",
+            "target": "y",
+            "target_map": {"yes": 1, "no": 0}
+        },
+        "Credit Card": {
+            "file": "CreditCard_Dataset.csv",
+            "target": "Class",
+            "target_map": None  # Already numeric
+        },
+        "Diabetes": {
+            "file": "Diabetes_Dataset.csv",
+            "target": "Outcome",
+            "target_map": None  # Already numeric
+        }
+    }
     
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    if dataset_name not in dataset_mapping:
+        raise ValueError(f"Unknown dataset: {dataset_name}. Available: {list(dataset_mapping.keys())}")
+    
+    config = dataset_mapping[dataset_name]
+    file_path = os.path.join(data_dir, config["file"])
+    
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Dataset file not found: {file_path}")
+    
+    # Load dataset
+    df = pd.read_csv(file_path)
+    
+    # Extract target
+    y = df[config["target"]].copy()
+    
+    # Map target values if needed
+    if config["target_map"]:
+        y = y.map(config["target_map"])
+    
+    # Ensure target is numeric
+    y = pd.Series(y.values, name=config["target"])
+    
+    # Handle categorical features
+    X = df.drop(columns=[config["target"]]).copy()
+    
+    # Encode categorical columns
+    categorical_cols = X.select_dtypes(include=['object']).columns
+    if len(categorical_cols) > 0:
+        X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
+    
+    # Remove non-numeric columns that might slip through
+    X = X.select_dtypes(include=[np.number])
     
     return X, y
 

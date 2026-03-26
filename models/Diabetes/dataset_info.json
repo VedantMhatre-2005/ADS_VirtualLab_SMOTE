@@ -1,0 +1,7 @@
+{
+  "Class 0 (Majority)": "500",
+  "Class 1 (Minority)": "268",
+  "Total Samples": 768,
+  "Imbalance Ratio": "1.87:1",
+  "Minority Class %": "34.90%"
+}

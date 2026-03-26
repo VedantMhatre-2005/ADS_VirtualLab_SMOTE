@@ -1,0 +1,350 @@
+{
+  "Attrition": {
+    "original": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.8231292517006803,
+          "Precision": 0.3076923076923077,
+          "Recall": 0.0851063829787234,
+          "F1-Score": 0.13333333333333333,
+          "Confusion Matrix": [
+            [
+              238,
+              9
+            ],
+            [
+              43,
+              4
+            ]
+          ],
+          "ROC-AUC": 0.7069515031441124
+        },
+        "model_path": "models\\Attrition\\random_forest_original.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.8571428571428571,
+          "Precision": 0.6470588235294118,
+          "Recall": 0.23404255319148937,
+          "F1-Score": 0.34375,
+          "Confusion Matrix": [
+            [
+              241,
+              6
+            ],
+            [
+              36,
+              11
+            ]
+          ],
+          "ROC-AUC": 0.7080713239727797
+        },
+        "model_path": "models\\Attrition\\logistic_regression_original.pkl"
+      }
+    },
+    "smote": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.8095238095238095,
+          "Precision": 0.3333333333333333,
+          "Recall": 0.19148936170212766,
+          "F1-Score": 0.24324324324324323,
+          "Confusion Matrix": [
+            [
+              229,
+              18
+            ],
+            [
+              38,
+              9
+            ]
+          ],
+          "ROC-AUC": 0.7159100697734516
+        },
+        "model_path": "models\\Attrition\\random_forest_smote.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.6530612244897959,
+          "Precision": 0.24770642201834864,
+          "Recall": 0.574468085106383,
+          "F1-Score": 0.34615384615384615,
+          "Confusion Matrix": [
+            [
+              165,
+              82
+            ],
+            [
+              20,
+              27
+            ]
+          ],
+          "ROC-AUC": 0.6946334740287708
+        },
+        "model_path": "models\\Attrition\\logistic_regression_smote.pkl"
+      }
+    },
+    "gan": null
+  },
+  "Bank": {
+    "original": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.8924029636182683,
+          "Precision": 0.5865580448065173,
+          "Recall": 0.2722117202268431,
+          "F1-Score": 0.37185280826339573,
+          "Confusion Matrix": [
+            [
+              7782,
+              203
+            ],
+            [
+              770,
+              288
+            ]
+          ],
+          "ROC-AUC": 0.8775860456692783
+        },
+        "model_path": "models\\Bank\\random_forest_original.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.8875373216852814,
+          "Precision": 0.568561872909699,
+          "Recall": 0.16068052930056712,
+          "F1-Score": 0.25055268975681655,
+          "Confusion Matrix": [
+            [
+              7856,
+              129
+            ],
+            [
+              888,
+              170
+            ]
+          ],
+          "ROC-AUC": 0.8304803548240854
+        },
+        "model_path": "models\\Bank\\logistic_regression_original.pkl"
+      }
+    },
+    "smote": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.8396549817538428,
+          "Precision": 0.39705882352941174,
+          "Recall": 0.7145557655954632,
+          "F1-Score": 0.5104659014179609,
+          "Confusion Matrix": [
+            [
+              6837,
+              1148
+            ],
+            [
+              302,
+              756
+            ]
+          ],
+          "ROC-AUC": 0.8693947654688078
+        },
+        "model_path": "models\\Bank\\random_forest_smote.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.7904456485679531,
+          "Precision": 0.31843817787418655,
+          "Recall": 0.6937618147448015,
+          "F1-Score": 0.43651501635444545,
+          "Confusion Matrix": [
+            [
+              6414,
+              1571
+            ],
+            [
+              324,
+              734
+            ]
+          ],
+          "ROC-AUC": 0.8324074085034202
+        },
+        "model_path": "models\\Bank\\logistic_regression_smote.pkl"
+      }
+    },
+    "gan": null
+  },
+  "Credit Card": {
+    "original": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.9995962220427653,
+          "Precision": 0.9411764705882353,
+          "Recall": 0.8163265306122449,
+          "F1-Score": 0.8743169398907105,
+          "Confusion Matrix": [
+            [
+              56859,
+              5
+            ],
+            [
+              18,
+              80
+            ]
+          ],
+          "ROC-AUC": 0.9742833419946482
+        },
+        "model_path": "models\\Credit Card\\random_forest_original.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.9991748885221726,
+          "Precision": 0.8311688311688312,
+          "Recall": 0.6530612244897959,
+          "F1-Score": 0.7314285714285713,
+          "Confusion Matrix": [
+            [
+              56851,
+              13
+            ],
+            [
+              34,
+              64
+            ]
+          ],
+          "ROC-AUC": 0.9560270189955554
+        },
+        "model_path": "models\\Credit Card\\logistic_regression_original.pkl"
+      }
+    },
+    "smote": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.9975773322565921,
+          "Precision": 0.40384615384615385,
+          "Recall": 0.8571428571428571,
+          "F1-Score": 0.5490196078431373,
+          "Confusion Matrix": [
+            [
+              56740,
+              124
+            ],
+            [
+              14,
+              84
+            ]
+          ],
+          "ROC-AUC": 0.9827047061086673
+        },
+        "model_path": "models\\Credit Card\\random_forest_smote.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.9741757663003405,
+          "Precision": 0.05795235028976175,
+          "Recall": 0.9183673469387755,
+          "F1-Score": 0.10902483343428225,
+          "Confusion Matrix": [
+            [
+              55401,
+              1463
+            ],
+            [
+              8,
+              90
+            ]
+          ],
+          "ROC-AUC": 0.9709467917724208
+        },
+        "model_path": "models\\Credit Card\\logistic_regression_smote.pkl"
+      }
+    },
+    "gan": null
+  },
+  "Diabetes": {
+    "original": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.7532467532467533,
+          "Precision": 0.66,
+          "Recall": 0.6111111111111112,
+          "F1-Score": 0.6346153846153846,
+          "Confusion Matrix": [
+            [
+              83,
+              17
+            ],
+            [
+              21,
+              33
+            ]
+          ],
+          "ROC-AUC": 0.8194444444444444
+        },
+        "model_path": "models\\Diabetes\\random_forest_original.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.7142857142857143,
+          "Precision": 0.6086956521739131,
+          "Recall": 0.5185185185185185,
+          "F1-Score": 0.5599999999999999,
+          "Confusion Matrix": [
+            [
+              82,
+              18
+            ],
+            [
+              26,
+              28
+            ]
+          ],
+          "ROC-AUC": 0.8229629629629629
+        },
+        "model_path": "models\\Diabetes\\logistic_regression_original.pkl"
+      }
+    },
+    "smote": {
+      "random_forest": {
+        "metrics": {
+          "Accuracy": 0.7337662337662337,
+          "Precision": 0.6031746031746031,
+          "Recall": 0.7037037037037037,
+          "F1-Score": 0.6495726495726495,
+          "Confusion Matrix": [
+            [
+              75,
+              25
+            ],
+            [
+              16,
+              38
+            ]
+          ],
+          "ROC-AUC": 0.8205555555555555
+        },
+        "model_path": "models\\Diabetes\\random_forest_smote.pkl"
+      },
+      "logistic_regression": {
+        "metrics": {
+          "Accuracy": 0.7402597402597403,
+          "Precision": 0.6129032258064516,
+          "Recall": 0.7037037037037037,
+          "F1-Score": 0.6551724137931035,
+          "Confusion Matrix": [
+            [
+              76,
+              24
+            ],
+            [
+              16,
+              38
+            ]
+          ],
+          "ROC-AUC": 0.8203703703703704
+        },
+        "model_path": "models\\Diabetes\\logistic_regression_smote.pkl"
+      }
+    },
+    "gan": null
+  }
+}

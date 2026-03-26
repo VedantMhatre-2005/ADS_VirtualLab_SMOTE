@@ -4,12 +4,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils.data_loader import load_imbalanced_dataset, get_dataset_info, prepare_data
-from utils.models import ClassificationModel, ModelEvaluator
+from utils.models import ModelEvaluator
 from utils.smote_handler import SMOTEHandler
-from utils.gan_handler import GANHandler
+from utils.model_loader import get_model_loader
 import warnings
 
 warnings.filterwarnings('ignore')
+
+# Set page config FIRST (before any other Streamlit calls)
+st.set_page_config(
+    page_title="SMOTE Virtual Lab",
+    page_icon="🧪",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize model loader
+@st.cache_resource
+def init_model_loader():
+    """Initialize the model loader."""
+    return get_model_loader(model_dir="models")
+
+model_loader = init_model_loader()
 
 # Helper to make DataFrames hashable for caching
 def hash_dataframe(df):
@@ -27,15 +43,15 @@ def load_and_prep_data(dataset_name):
     X_train, X_test, y_train, y_test, scaler = prepare_data(X, y)
     return X, y, dataset_info, X_train, X_test, y_train, y_test, scaler
 
-@st.cache_data(hash_funcs={pd.DataFrame: hash_dataframe, pd.Series: hash_series})
-def train_original_model(model_type_key, X_train, y_train, X_test, y_test):
-    """Train model on original data with caching."""
-    model = ClassificationModel(model_type=model_type_key, random_state=42)
-    model.train(X_train, y_train)
-    y_pred = model.predict(X_test)
-    y_pred_proba = model.predict_proba(X_test)
-    metrics = ModelEvaluator.evaluate(y_test, y_pred, y_pred_proba)
-    return model, y_pred, y_pred_proba, metrics
+@st.cache_data
+def load_pretrained_model(dataset_name, model_type_key, technique):
+    """Load pre-trained model."""
+    return model_loader.load_model(dataset_name, model_type_key, technique)
+
+@st.cache_data
+def load_pretrained_scaler(dataset_name):
+    """Load pre-trained scaler."""
+    return model_loader.load_scaler(dataset_name)
 
 @st.cache_data(hash_funcs={pd.DataFrame: hash_dataframe, pd.Series: hash_series})
 def apply_smote_to_data(X_train, y_train):
@@ -45,36 +61,11 @@ def apply_smote_to_data(X_train, y_train):
     smote_info = smote_handler.get_class_distribution_info(y_train, y_train_smote)
     return X_train_smote, y_train_smote, smote_handler, smote_info
 
-@st.cache_data(hash_funcs={pd.DataFrame: hash_dataframe, pd.Series: hash_series})
-def train_smote_model(model_type_key, X_train_smote, y_train_smote, X_test, y_test):
-    """Train model on SMOTE-balanced data with caching."""
-    model = ClassificationModel(model_type=model_type_key, random_state=42)
-    model.train(X_train_smote, y_train_smote)
+def predict_with_model(model, X_test):
+    """Make predictions with a pre-trained model."""
     y_pred = model.predict(X_test)
     y_pred_proba = model.predict_proba(X_test)
-    metrics = ModelEvaluator.evaluate(y_test, y_pred, y_pred_proba)
-    return model, y_pred, y_pred_proba, metrics
-
-@st.cache_data(hash_funcs={pd.DataFrame: hash_dataframe, pd.Series: hash_series})
-def apply_gan_to_data(X_train, y_train, X_test, y_test, model_type_key):
-    """Apply GAN and train model with caching."""
-    gan_handler = GANHandler(epochs=50, random_state=42)
-    X_train_gan, y_train_gan, _ = gan_handler.apply_gan(X_train, y_train, verbose=False)
-    
-    model = ClassificationModel(model_type=model_type_key, random_state=42)
-    model.train(X_train_gan, y_train_gan)
-    y_pred = model.predict(X_test)
-    y_pred_proba = model.predict_proba(X_test)
-    metrics = ModelEvaluator.evaluate(y_test, y_pred, y_pred_proba)
-    return model, y_pred, y_pred_proba, metrics
-
-# Set page config
-st.set_page_config(
-    page_title="SMOTE Virtual Lab",
-    page_icon="🧪",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+    return y_pred, y_pred_proba
 
 # Add custom CSS
 st.markdown("""
@@ -222,100 +213,335 @@ elif st.session_state.current_page == 'objectives':
 
 # ========== SIMULATION PAGE ==========
 elif st.session_state.current_page == 'simulation':
-    st.title("🔬 Simulation Configuration")
+    st.title("🔬 Interactive Analysis Suite")
     
-    st.markdown("Configure your simulation parameters below to run the class imbalance analysis.")
-    st.markdown("---")
+    st.markdown("""
+    <style>
+    .header-subtitle {
+        font-size: 1.1em;
+        color: #666;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+    .config-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .config-header {
+        font-size: 1.3em;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    .dataset-card {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .metric-box {
+        background: #e7f3ff;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        border-left: 4px solid #0366d6;
+        height: 250px;
+        box-sizing: border-box;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .model-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .model-card {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        border: 2px solid #e1e4e8;
+        transition: all 0.3s ease;
+    }
+    .model-card:hover {
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    }
+    .model-title {
+        font-size: 1.1em;
+        font-weight: 600;
+        color: #0366d6;
+        margin-bottom: 0.5rem;
+    }
+    .model-feature {
+        margin: 0.5rem 0;
+        font-size: 0.95em;
+        line-height: 1.4;
+    }
+    .feature-good {
+        color: #28a745;
+    }
+    .feature-caution {
+        color: #fd7e14;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
-    # Create a professional container layout
-    with st.container():
-        # Dataset Configuration Section
-        st.subheader("📊 Data Configuration")
-        
-        datasets = [
-            "Credit Card Fraud",
-            "Disease Detection",
-            "Network Intrusion",
-            "Rare Event Prediction"
-        ]
-        
-        selected_dataset = st.selectbox(
-            "Select Dataset",
-            datasets,
-            help="Choose an imbalanced dataset to analyze",
-            key="dataset_select"
-        )
-        
-        dataset_descriptions = {
-            "Credit Card Fraud": "10,000 samples | 2% minority | Extreme imbalance scenario",
-            "Disease Detection": "8,000 samples | 5% minority | Medical domain",
-            "Network Intrusion": "12,000 samples | 4% minority | Cybersecurity domain",
-            "Rare Event Prediction": "9,000 samples | 8% minority | Moderate imbalance"
-        }
-        st.caption(f"🔹 {dataset_descriptions[selected_dataset]}")
-        
+    st.markdown(
+        """
+        Explore how different machine learning techniques handle class imbalance with our interactive analysis suite.
+        Select your dataset and model configuration below to begin the analysis.
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.markdown("")
     
+    # ========== DATASET CONFIGURATION ==========
     with st.container():
-        # Model Configuration Section
-        st.subheader("🤖 Model Configuration")
+        st.markdown("""
+        <div class="config-section">
+            <div class="config-header">📊 Step 1: Select Your Dataset</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2)
+        # Get available datasets
+        available_datasets = model_loader.get_available_datasets()
         
-        with col1:
-            model_type = st.radio(
-                "Select Classification Model",
-                ["Random Forest", "Logistic Regression"],
-                help="Choose the ML algorithm",
-                key="model_select"
-            )
-        
-        with col2:
-            model_info = {
-                "Random Forest": "✓ Better for complex patterns\n✓ Handles non-linearity\n✗ Slower training",
-                "Logistic Regression": "✓ Faster training\n✓ More interpretable\n✗ Assumes linearity"
-            }
-            st.info(model_info[model_type])
-    
-    st.markdown("")
-    
-    with st.container():
-        # Advanced Options Section
-        st.subheader("⚙️ Advanced Options")
+        if not available_datasets:
+            st.error("❌ No pre-trained models found. Please run train_all_models.py first.")
+            st.stop()
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            compare_with_gan = st.checkbox(
-                "🎨 Compare with GAN Balancing",
-                value=False,
-                help="Enable advanced GAN comparison (adds 1-3 minutes)",
-                key="gan_option"
+            selected_dataset = st.selectbox(
+                "Choose a Dataset",
+                available_datasets,
+                help="Select from four real-world imbalanced classification datasets",
+                key="dataset_select"
+            )
+        
+        # Dataset information and details
+        dataset_descriptions = {
+            "Attrition": {
+                "domain": "Human Resources",
+                "samples": "1,470",
+                "features": "26",
+                "imbalance": "5.20:1",
+                "minority_pct": "16.12%",
+                "description": "Employee attrition prediction dataset with HR metrics",
+                "applications": "Workforce retention, employee segmentation"
+            },
+            "Bank": {
+                "domain": "Finance",
+                "samples": "45,211",
+                "features": "7",
+                "imbalance": "7.55:1",
+                "minority_pct": "11.70%",
+                "description": "Bank marketing campaign response dataset",
+                "applications": "Customer targeting, campaign optimization"
+            },
+            "Credit Card": {
+                "domain": "Fraud Detection",
+                "samples": "284,807",
+                "features": "30",
+                "imbalance": "577.88:1",
+                "minority_pct": "0.17%",
+                "description": "Credit card fraud detection with extreme class imbalance",
+                "applications": "Fraud prevention, anomaly detection"
+            },
+            "Diabetes": {
+                "domain": "Healthcare",
+                "samples": "768",
+                "features": "8",
+                "imbalance": "1.87:1",
+                "minority_pct": "34.90%",
+                "description": "Diabetes prediction dataset with minimal imbalance",
+                "applications": "Disease prediction, patient screening"
+            }
+        }
+        
+        if selected_dataset in dataset_descriptions:
+            desc = dataset_descriptions[selected_dataset]
+            
+            # Display dataset card with all information
+            st.markdown(f"""
+            <div class="dataset-card" style="background: #f0f2f6; border-left: 5px solid #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.2rem;">
+                    <div>
+                        <span style="font-size: 0.9em; color: #666; text-transform: uppercase; font-weight: 600;">Domain</span>
+                        <div style="font-size: 1.4em; font-weight: 700; color: #0f1419;">{desc["domain"]}</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.9em; color: #666; text-transform: uppercase; font-weight: 600;">Samples</span>
+                        <div style="font-size: 1.4em; font-weight: 700; color: #0f1419;">{desc["samples"]}</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.9em; color: #666; text-transform: uppercase; font-weight: 600;">Imbalance Ratio</span>
+                        <div style="font-size: 1.4em; font-weight: 700; color: #0f1419;">{desc["imbalance"]}</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.9em; color: #666; text-transform: uppercase; font-weight: 600;">Minority %</span>
+                        <div style="font-size: 1.4em; font-weight: 700; color: #0f1419;">{desc["minority_pct"]}</div>
+                    </div>
+                </div>
+                <div style="border-top: 1px solid #ddd; padding-top: 1rem;">
+                    <div style="margin-bottom: 0.8rem;">
+                        <strong>📌 Description:</strong><br>
+                        <span style="font-size: 0.95em; color: #555;">{desc["description"]}</span>
+                    </div>
+                    <div>
+                        <strong>💡 Use Cases:</strong><br>
+                        <span style="font-size: 0.95em; color: #555;">{desc["applications"]}</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("")
+    
+    # ========== MODEL CONFIGURATION ==========
+    with st.container():
+        st.markdown("""
+        <div class="config-section">
+            <div class="config-header">🤖 Step 2: Select Classification Algorithm</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            model_type = st.radio(
+                "Choose Algorithm",
+                ["Random Forest", "Logistic Regression"],
+                help="Select the machine learning algorithm",
+                key="model_select"
             )
         
         with col2:
-            if compare_with_gan:
-                st.warning("⏱️ Extended runtime")
+            st.markdown("""
+            <div class="model-comparison">
+            """, unsafe_allow_html=True)
+            
+            if model_type == "Random Forest":
+                st.markdown("""
+                <div class="model-card">
+                    <div class="model-title">🌲 Random Forest Classifier</div>
+                    <div class="model-feature"><span class="feature-good">✓ Handles non-linear patterns</span></div>
+                    <div class="model-feature"><span class="feature-good">✓ Robust to feature scaling</span></div>
+                    <div class="model-feature"><span class="feature-good">✓ Feature importance analysis</span></div>
+                    <div class="model-feature"><span class="feature-caution">⚠ Slower inference time</span></div>
+                    <div class="model-feature"><span class="feature-caution">⚠ Prone to overfitting</span></div>
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.success("⏱️ Standard runtime")
+                st.markdown("""
+                <div class="model-card">
+                    <div class="model-title">📊 Logistic Regression</div>
+                    <div class="model-feature"><span class="feature-good">✓ Fast training and inference</span></div>
+                    <div class="model-feature"><span class="feature-good">✓ Highly interpretable</span></div>
+                    <div class="model-feature"><span class="feature-good">✓ Probability outputs</span></div>
+                    <div class="model-feature"><span class="feature-caution">⚠ Assumes linear relationships</span></div>
+                    <div class="model-feature"><span class="feature-caution">⚠ Requires scaling</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("")
     
+    # ========== ANALYSIS OPTIONS ==========
     with st.container():
-        # Runtime Estimate
-        st.info(
-            "⏱️ **Estimated Runtime:**\n"
-            "• Without GAN: ~30 seconds\n"
-            "• With GAN: ~2-3 minutes"
-        )
+        st.markdown("""
+        <div class="config-section">
+            <div class="config-header">⚙️ Step 3: Configure Analysis Options</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("""
+            **Original Data Analysis**
+            
+            Evaluates model performance on unbalanced training data. 
+            This serves as the baseline for comparison.
+            """)
+            compare_techniques = True
+        
+        with col2:
+            st.markdown("""
+            **SMOTE Balancing**
+            
+            Synthetic Minority Over-sampling Technique creates synthetic 
+            minority class samples before training.
+            """)
+        
+        with col3:
+            st.markdown("""
+            **Optional GAN Training**
+            
+            After initial analysis, you can optionally train 
+            Generative models for comparison (1-3 min).
+            """)
     
     st.markdown("")
     
-    # Run Button
-    col_button_left, col_button_right = st.columns([2, 1])
+    # ========== EXECUTION SECTION ==========
+    with st.container():
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("""
+            <div class="metric-box">
+                <strong>⚡ Performance Profile</strong><br>
+                <span style="font-size: 0.9em;">All models are pre-trained and cached for instant inference.</span><br>
+                <span style="font-size: 0.85em; color: #0366d6;">Typical analysis completion: &lt;2 seconds</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div class="metric-box">
+                <strong>📈 Metrics Included</strong><br>
+                <span style="font-size: 0.9em;">
+                Accuracy, Precision, Recall,<br>
+                F1-Score, ROC-AUC, Confusion Matrix
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown("""
+            <div class="metric-box">
+                <strong>✅ Outputs</strong><br>
+                <span style="font-size: 0.9em;">
+                Interactive visualizations,<br>
+                detailed metrics, insights
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
     
-    with col_button_left:
-        run_button = st.button("🚀 Run Simulation", use_container_width=True, key="run_button")
+    st.markdown("")
+    st.markdown("---")
+    st.markdown("")
+    
+    # ========== RUN BUTTON ==========
+    col_button = st.columns([1])[0]
+    
+    run_button = st.button(
+        "▶️  Run Analysis",
+        use_container_width=True,
+        key="run_button",
+        help="Load pre-trained models and execute analysis"
+    )
     
     st.markdown("")
 
@@ -326,150 +552,404 @@ elif st.session_state.current_page == 'simulation':
     
     # Handle the run button click
     if run_button:
-        with st.spinner("Loading and preparing data..."):
-            # Use cached data loading
-            X, y, dataset_info, X_train, X_test, y_train, y_test, scaler = load_and_prep_data(selected_dataset)
-            
-            # Store in session state
-            st.session_state.X = X
-            st.session_state.y = y
-            st.session_state.X_train = X_train
-            st.session_state.X_test = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
-            st.session_state.dataset_info = dataset_info
-            st.session_state.model_type = model_type
-            st.session_state.model_type_key = model_type_map[model_type]
-            st.session_state.compare_with_gan = compare_with_gan
-            st.session_state.selected_dataset = selected_dataset
-            st.session_state.analysis_ready = True
+        with st.spinner("🔄 Loading pre-trained models and executing analysis..."):
+            try:
+                # Load data
+                X, y, dataset_info, X_train, X_test, y_train, y_test, scaler = load_and_prep_data(selected_dataset)
+                
+                # Load pre-trained models
+                model_type_key = model_type_map[model_type]
+                model_original = load_pretrained_model(selected_dataset, model_type_key, "original")
+                model_smote = load_pretrained_model(selected_dataset, model_type_key, "smote")
+                
+                # Get predictions
+                y_pred_original, y_pred_proba_original = predict_with_model(model_original, X_test)
+                y_pred_smote, y_pred_proba_smote = predict_with_model(model_smote, X_test)
+                
+                # Evaluate models
+                metrics_original = ModelEvaluator.evaluate(y_test, y_pred_original, y_pred_proba_original)
+                metrics_smote = ModelEvaluator.evaluate(y_test, y_pred_smote, y_pred_proba_smote)
+                
+                # Compute dataframes for stable display (prevents table flickering)
+                feature_stats = X.iloc[:, :5].describe().T
+                metrics_df_original = ModelEvaluator.get_metrics_dataframe(metrics_original)
+                metrics_df_smote_computed = ModelEvaluator.get_metrics_dataframe(metrics_smote)
+                comparison_df_computed = ModelEvaluator.compare_metrics(metrics_original, metrics_smote, "SMOTE")
+                
+                # Apply SMOTE for distribution info
+                X_train_smote_temp, y_train_smote_temp, smote_handler_temp, smote_info_temp = apply_smote_to_data(X_train, y_train)
+                dist_df_computed = SMOTEHandler.get_distribution_dataframe(y_train, y_train_smote_temp)
+                details_df_computed = pd.DataFrame({
+                    "Metric": ["Synthetic Samples Created", "Original Imbalance Ratio", "Post-SMOTE Ratio"],
+                    "Value": [
+                        str(smote_info_temp['Samples Added']),
+                        smote_info_temp['Original Ratio'],
+                        smote_info_temp['SMOTE Ratio']
+                    ]
+                })
+                
+                # Store in session state
+                st.session_state.X = X
+                st.session_state.y = y
+                st.session_state.X_train = X_train
+                st.session_state.X_test = X_test
+                st.session_state.y_train = y_train
+                st.session_state.y_test = y_test
+                st.session_state.dataset_info = dataset_info
+                st.session_state.model_type = model_type
+                st.session_state.model_type_key = model_type_key
+                st.session_state.selected_dataset = selected_dataset
+                st.session_state.model_original = model_original
+                st.session_state.model_smote = model_smote
+                st.session_state.y_pred_original = y_pred_original
+                st.session_state.y_pred_proba_original = y_pred_proba_original
+                st.session_state.y_pred_smote = y_pred_smote
+                st.session_state.y_pred_proba_smote = y_pred_proba_smote
+                st.session_state.metrics_original = metrics_original
+                st.session_state.metrics_smote = metrics_smote
+                st.session_state.compare_techniques = compare_techniques
+                
+                # Store computed dataframes to prevent flickering
+                st.session_state.feature_stats_df = feature_stats
+                st.session_state.metrics_df_original = metrics_df_original
+                st.session_state.metrics_df_smote = metrics_df_smote_computed
+                st.session_state.comparison_df = comparison_df_computed
+                st.session_state.dist_df = dist_df_computed
+                st.session_state.details_df = details_df_computed
+                st.session_state.smote_info = smote_info_temp
+                st.session_state.analysis_ready = True
+                
+            except FileNotFoundError as e:
+                st.error(f"❌ Error loading models: {str(e)}\nPlease ensure train_all_models.py has been run.")
+            except Exception as e:
+                st.error(f"❌ Error during analysis: {str(e)}")
 
 # Main analysis section
 if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
+    st.markdown("""
+    <style>
+    .section-divider {
+        border-top: 3px solid #667eea;
+        margin: 3rem 0 2rem 0;
+    }
+    .section-title {
+        font-size: 1.8em;
+        color: #0f1419;
+        margin-bottom: 1rem;
+        font-weight: 700;
+    }
+    .insight-box {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+    .success-box {
+        background: #d4edda;
+        border-left: 4px solid #28a745;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+    .warning-box {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     # ======== SECTION 1: EXPLORATORY DATA ANALYSIS ========
-    st.header("📊 Section 1: Exploratory Data Analysis")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('### 📊 Section 1: Dataset Overview & Class Imbalance Analysis')
     
-    col1, col2 = st.columns(2)
+    st.markdown("""
+    This section provides a comprehensive analysis of the dataset's characteristics, 
+    with particular focus on class distribution and imbalance metrics that are critical 
+    for understanding model behavior and selection strategy.
+    """)
+    
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.subheader("Dataset Information")
+        st.markdown("#### Dataset Characteristics")
+        st.markdown("""
+        <style>
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.8rem 1.2rem;
+            border-radius: 10px;
+            margin-bottom: 0.6rem;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .metric-label {
+            font-size: 0.75em;
+            opacity: 0.9;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
         info_df = pd.DataFrame(list(st.session_state.dataset_info.items()), 
                               columns=["Metric", "Value"])
-        # Convert all values to string to prevent Arrow serialization issues
         info_df["Value"] = info_df["Value"].astype(str)
-        st.table(info_df)
+        
+        # Display each metric in a professional card box
+        for idx, (_, row) in enumerate(info_df.iterrows()):
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{row["Metric"]}</div>
+                <div class="metric-value">{row["Value"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Add dataset preview option
+        st.markdown("---")
+        if st.checkbox(f"📋 Preview first 5 rows of {st.session_state.selected_dataset}", key="preview_dataset"):
+            st.markdown("##### Dataset Preview")
+            preview_df = st.session_state.X.head(5)
+            st.dataframe(preview_df, use_container_width=True)
     
     with col2:
-        st.subheader("Class Distribution (Original)")
+        st.markdown("#### Class Distribution Analysis")
         class_counts = st.session_state.y.value_counts().sort_index()
         
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+        # Create visualization with pie chart below the histogram
+        fig = plt.figure(figsize=(8, 10))
+        gs = fig.add_gridspec(2, 1, hspace=0.4)
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1])
         
-        # Bar plot
-        ax1.bar(['Majority (0)', 'Minority (1)'], 
-               [class_counts[0], class_counts[1]], 
-               color=['#1f77b4', '#ff7f0e'])
-        ax1.set_ylabel('Sample Count')
-        ax1.set_title('Class Distribution')
-        ax1.grid(axis='y', alpha=0.3)
+        # Bar plot (histogram)
+        bars = ax1.bar(['Majority (0)', 'Minority (1)'], 
+                      [class_counts[0], class_counts[1]], 
+                      color=['#667eea', '#ff6b6b'], alpha=0.8, edgecolor='black', linewidth=1.2)
+        ax1.set_ylabel('Sample Count', fontsize=11, fontweight=600)
+        ax1.set_title('Class Count Distribution', fontsize=12, fontweight=600)
+        ax1.grid(axis='y', alpha=0.3, linestyle='--')
         
-        # Pie chart
-        ax2.pie([class_counts[0], class_counts[1]], 
-               labels=['Majority', 'Minority'],
-               autopct='%1.1f%%',
-               colors=['#1f77b4', '#ff7f0e'])
-        ax2.set_title('Class Proportion')
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height):,}', ha='center', va='bottom', fontweight=600)
         
-        plt.tight_layout()
+        # Pie chart (below histogram)
+        colors = ['#667eea', '#ff6b6b']
+        wedges, texts, autotexts = ax2.pie([class_counts[0], class_counts[1]], 
+                                  labels=['Majority', 'Minority'],
+                                  autopct='%1.1f%%',
+                                  colors=colors,
+                                  startangle=90,
+                                  textprops={'fontsize': 11, 'fontweight': 600})
+        ax2.set_title('Class Proportion', fontsize=12, fontweight=600)
+        
         st.pyplot(fig)
     
+    # Imbalance analysis insight
+    imbalance_info = st.session_state.dataset_info
+    if isinstance(imbalance_info.get('Imbalance Ratio'), str):
+        ratio_str = imbalance_info['Imbalance Ratio']
+        minority_pct = float(str(imbalance_info.get('Minority Class %', '0')).replace('%', ''))
+    else:
+        ratio_str = f"{imbalance_info.get('Imbalance Ratio', 0)}:1"
+        minority_pct = float(imbalance_info.get('Minority Class %', 0))
+    
+    st.markdown(f"""
+    <div class="insight-box">
+    <strong>📌 Imbalance Severity Assessment:</strong><br>
+    The dataset exhibits a class imbalance ratio of <code>{ratio_str}</code> with the minority class 
+    representing only <code>{minority_pct:.2f}%</code> of the total samples. This level of imbalance 
+    can lead to models that achieve high accuracy by simply predicting the majority class while 
+    completely missing minority class instances. Balanced evaluation metrics (Recall, Precision, F1-Score) 
+    are therefore critical.
+    </div>
+    """, unsafe_allow_html=True)
+    
     # Data statistics
-    st.subheader("Feature Statistics (First 5 Features)")
-    feature_stats = st.session_state.X.iloc[:, :5].describe().T
-    st.dataframe(feature_stats, use_container_width=True)
+    st.markdown("#### Feature Statistics (Sample of First 5 Features)")
+    if "feature_stats_df" in st.session_state:
+        st.dataframe(st.session_state.feature_stats_df, use_container_width=True)
+    else:
+        feature_stats = st.session_state.X.iloc[:, :5].describe().T
+        st.dataframe(feature_stats, use_container_width=True)
     
-    # ======== SECTION 2: MODEL TRAINING (ORIGINAL DATA) ========
-    st.header("🤖 Section 2: Model Training on Original Data")
+    # ======== SECTION 2: MODEL PERFORMANCE (ORIGINAL DATA) ========
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('### 🤖 Section 2: Baseline Model Performance (Original Imbalanced Data)')
     
-    with st.spinner("Training model on original dataset..."):
-        model_original, y_pred_original, y_pred_proba_original, metrics_original = train_original_model(
-            st.session_state.model_type_key,
-            st.session_state.X_train,
-            st.session_state.y_train,
-            st.session_state.X_test,
-            st.session_state.y_test
+    st.markdown("""
+    This section evaluates the pre-trained model performance on the original, imbalanced dataset.
+    These metrics serve as the baseline for comparing with SMOTE-balanced approach.
+    **Note:** The original imbalanced data often leads to high accuracy but poor minority class recall.
+    """)
+    
+    # Key metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    metrics_original = st.session_state.metrics_original
+    
+    with col1:
+        st.metric(
+            "Accuracy",
+            f"{metrics_original['Accuracy']:.4f}",
+            help="Overall correctness: (TP+TN)/(TP+TN+FP+FN)"
+        )
+    with col2:
+        st.metric(
+            "Precision",
+            f"{metrics_original['Precision']:.4f}",
+            help="Of predicted positives, how many are actually positive: TP/(TP+FP)"
+        )
+    with col3:
+        st.metric(
+            "Recall",
+            f"{metrics_original['Recall']:.4f}",
+            help="Of actual positives, how many did we catch: TP/(TP+FN) [Critical for imbalanced data]"
+        )
+    with col4:
+        st.metric(
+            "F1-Score",
+            f"{metrics_original['F1-Score']:.4f}",
+            help="Harmonic mean of Precision and Recall: 2·(P·R)/(P+R)"
+        )
+    with col5:
+        st.metric(
+            "ROC-AUC",
+            f"{metrics_original.get('ROC-AUC', 0.0):.4f}",
+            help="Area under ROC curve: probabilistic ranking ability"
         )
     
-    col1, col2, col3, col4 = st.columns(4)
+    # Analysis details
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.metric("Accuracy", f"{metrics_original['Accuracy']:.4f}")
-    with col2:
-        st.metric("Precision", f"{metrics_original['Precision']:.4f}")
-    with col3:
-        st.metric("Recall", f"{metrics_original['Recall']:.4f}")
-    with col4:
-        st.metric("F1-Score", f"{metrics_original['F1-Score']:.4f}")
-    
-    # Confusion matrix
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Confusion Matrix (Original)")
-        cm_original = metrics_original['Confusion Matrix']
+        st.markdown("#### Confusion Matrix")
+        cm_original = st.session_state.metrics_original['Confusion Matrix']
         
         fig, ax = plt.subplots(figsize=(6, 5))
         sns.heatmap(cm_original, annot=True, fmt='d', cmap='Blues', 
-                   xticklabels=['Negative', 'Positive'],
-                   yticklabels=['Negative', 'Positive'],
-                   cbar=True, ax=ax)
-        ax.set_ylabel('True Label')
-        ax.set_xlabel('Predicted Label')
-        ax.set_title('Original Model Confusion Matrix')
+                   xticklabels=['Negative (0)', 'Positive (1)'],
+                   yticklabels=['Negative (0)', 'Positive (1)'],
+                   cbar_kws={'label': 'Count'},
+                   ax=ax, linewidths=1, linecolor='gray')
+        ax.set_ylabel('True Label', fontweight=600)
+        ax.set_xlabel('Predicted Label', fontweight=600)
+        ax.set_title('Original Model Confusion Matrix', fontweight=600, fontsize=12)
+        plt.tight_layout()
         st.pyplot(fig)
+        
+        # Interpretation
+        cm_original_array = np.array(cm_original)
+        tn, fp, fn, tp = cm_original_array.ravel()
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        
+        st.markdown(f"""
+        **Confusion Matrix Breakdown:**
+        - **True Negatives (TN):** {tn} - Correctly identified majority examples
+        - **False Positives (FP):** {fp} - Majority misclassified as minority  
+        - **False Negatives (FN):** {fn} - Minority missed (problematic!)
+        - **True Positives (TP):** {tp} - Correctly identified minority examples
+        
+        **Sensitivity (Recall):** {sensitivity:.4f} | **Specificity:** {specificity:.4f}
+        """)
     
     with col2:
-        st.subheader("Metrics Comparison Table")
-        metrics_df = ModelEvaluator.get_metrics_dataframe(metrics_original)
-        st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+        st.markdown("#### Performance Metrics Table")
+        if "metrics_df_original" in st.session_state:
+            st.dataframe(st.session_state.metrics_df_original, use_container_width=True, hide_index=True)
+        else:
+            metrics_df = ModelEvaluator.get_metrics_dataframe(st.session_state.metrics_original)
+            st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+        
+        # Add insight
+        if metrics_original['Recall'] < 0.6:
+            st.markdown("""
+            <div class="warning-box">
+            <strong>⚠️ Critical Finding:</strong> Low recall indicates the model is missing many 
+            minority class instances. This is typical on imbalanced data and often unacceptable 
+            for real-world applications (fraud detection, disease diagnosis, etc.).
+            </div>
+            """, unsafe_allow_html=True)
     
     # ======== SECTION 3: APPLY SMOTE ========
-    st.header("⚖️ Section 3: Applying SMOTE to Balance the Dataset")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('### ⚖️ Section 3: Applying SMOTE for Class Balancing')
     
-    with st.spinner("Applying SMOTE..."):
+    st.markdown("""
+    **SMOTE (Synthetic Minority Over-sampling Technique)** addresses class imbalance by creating 
+    synthetic samples of the minority class. For each minority instance, SMOTE:
+    1. Finds k nearest neighbors in the minority class (k=5 by default)
+    2. Randomly selects one neighbor
+    3. Creates a new synthetic sample along the line connecting the two points
+    
+    **Mathematical Formula:**
+    """)
+    
+    st.latex(r"x_{\text{synthetic}} = x_i + \lambda(x_{\text{neighbor}} - x_i), \quad \lambda \in [0, 1]")
+    
+    st.markdown("""
+    This approach preserves feature relationships while increasing minority class representation.
+    """)
+    
+    with st.spinner("🔄 Applying SMOTE to training data..."):
         X_train_smote, y_train_smote, smote_handler, smote_info = apply_smote_to_data(
             st.session_state.X_train, 
             st.session_state.y_train
         )
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.subheader("Class Distribution Before & After SMOTE")
-        dist_df = SMOTEHandler.get_distribution_dataframe(
-            st.session_state.y_train, 
-            y_train_smote
-        )
-        st.dataframe(dist_df, use_container_width=True, hide_index=True)
+        st.markdown("#### Class Distribution Before & After SMOTE")
+        if "dist_df" in st.session_state:
+            st.dataframe(st.session_state.dist_df, use_container_width=True, hide_index=True)
+        else:
+            dist_df = SMOTEHandler.get_distribution_dataframe(
+                st.session_state.y_train, 
+                y_train_smote
+            )
+            st.dataframe(dist_df, use_container_width=True, hide_index=True)
     
     with col2:
-        st.subheader("SMOTE Details")
-        details = pd.DataFrame({
-            "Metric": ["Samples Added", "Original Ratio", "SMOTE Ratio"],
-            "Value": [
-                str(smote_info['Samples Added']),
-                smote_info['Original Ratio'],
-                smote_info['SMOTE Ratio']
-            ]
-        })
-        st.dataframe(details, use_container_width=True, hide_index=True)
+        st.markdown("#### SMOTE Application Summary")
+        if "details_df" in st.session_state:
+            st.dataframe(st.session_state.details_df, use_container_width=True, hide_index=True)
+        else:
+            details = pd.DataFrame({
+                "Metric": ["Synthetic Samples Created", "Original Imbalance Ratio", "Post-SMOTE Ratio"],
+                "Value": [
+                    str(smote_info['Samples Added']),
+                    smote_info['Original Ratio'],
+                    smote_info['SMOTE Ratio']
+                ]
+            })
+            st.dataframe(details, use_container_width=True, hide_index=True)
     
-    # Visualization
+    # Visualization - Class distribution comparison
     col1, col2 = st.columns(2)
     
     with col1:
-        fig, ax = plt.subplots(figsize=(6, 4))
+        st.markdown("#### Sample Count Evolution")
+        fig, ax = plt.subplots(figsize=(7, 5))
         classes = ['Majority (0)', 'Minority (1)']
         original = [
             smote_info['Original Distribution'][0],
@@ -483,415 +963,557 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
         x = np.arange(len(classes))
         width = 0.35
         
-        ax.bar(x - width/2, original, width, label='Before SMOTE', color='#1f77b4')
-        ax.bar(x + width/2, after_smote, width, label='After SMOTE', color='#2ca02c')
+        bars1 = ax.bar(x - width/2, original, width, label='Before SMOTE', 
+                      color='#667eea', alpha=0.8, edgecolor='black', linewidth=1.2)
+        bars2 = ax.bar(x + width/2, after_smote, width, label='After SMOTE',
+                      color='#51cf66', alpha=0.8, edgecolor='black', linewidth=1.2)
         
-        ax.set_ylabel('Sample Count')
-        ax.set_title('Class Distribution: Before vs After SMOTE')
+        ax.set_ylabel('Sample Count', fontweight=600, fontsize=11)
+        ax.set_title('SMOTE Impact on Class Distribution', fontweight=600, fontsize=12)
         ax.set_xticks(x)
-        ax.set_xticklabels(classes)
-        ax.legend()
-        ax.grid(axis='y', alpha=0.3)
+        ax.set_xticklabels(classes, fontsize=10)
+        ax.legend(fontsize=10)
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
         
-        st.pyplot(fig)
-    
-    with col2:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        
-        before_ratio_val = float(smote_info['Original Ratio'].split(':')[0])
-        after_ratio_val = float(smote_info['SMOTE Ratio'].split(':')[0])
-        
-        ax.bar(['Original Ratio', 'After SMOTE'], 
-              [before_ratio_val, after_ratio_val],
-              color=['#ff7f0e', '#2ca02c'])
-        ax.set_ylabel('Imbalance Ratio (Majority:Minority)')
-        ax.set_title('Imbalance Ratio Reduction')
-        ax.axhline(y=1, color='r', linestyle='--', alpha=0.5, label='Perfect Balance')
-        ax.legend()
-        ax.grid(axis='y', alpha=0.3)
-        
-        st.pyplot(fig)
-    
-    # ======== SECTION 4: MODEL TRAINING (SMOTE-BALANCED DATA) ========
-    st.header("🤖 Section 4: Model Training on SMOTE-Balanced Data")
-    
-    with st.spinner("Training model on SMOTE-balanced dataset..."):
-        model_smote, y_pred_smote, y_pred_proba_smote, metrics_smote = train_smote_model(
-            st.session_state.model_type_key,
-            X_train_smote,
-            y_train_smote,
-            st.session_state.X_test,
-            st.session_state.y_test
-        )
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Accuracy", f"{metrics_smote['Accuracy']:.4f}")
-    with col2:
-        st.metric("Precision", f"{metrics_smote['Precision']:.4f}")
-    with col3:
-        st.metric("Recall", f"{metrics_smote['Recall']:.4f}")
-    with col4:
-        st.metric("F1-Score", f"{metrics_smote['F1-Score']:.4f}")
-    
-    # Confusion matrix
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Confusion Matrix (SMOTE-Balanced)")
-        cm_smote = metrics_smote['Confusion Matrix']
-        
-        fig, ax = plt.subplots(figsize=(6, 5))
-        sns.heatmap(cm_smote, annot=True, fmt='d', cmap='Greens',
-                   xticklabels=['Negative', 'Positive'],
-                   yticklabels=['Negative', 'Positive'],
-                   cbar=True, ax=ax)
-        ax.set_ylabel('True Label')
-        ax.set_xlabel('Predicted Label')
-        ax.set_title('SMOTE-Balanced Model Confusion Matrix')
-        st.pyplot(fig)
-    
-    with col2:
-        st.subheader("Metrics Comparison Table")
-        metrics_df_smote = ModelEvaluator.get_metrics_dataframe(metrics_smote)
-        st.dataframe(metrics_df_smote, use_container_width=True, hide_index=True)
-    
-    # ======== SECTION 5: PERFORMANCE COMPARISON ========
-    st.header("📈 Section 5: Performance Comparison (Before vs After SMOTE)")
-    
-    comparison_df = ModelEvaluator.compare_metrics(
-        metrics_original, 
-        metrics_smote, 
-        "SMOTE"
-    )
-    
-    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-    
-    # Visualization
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        fig, ax = plt.subplots(figsize=(8, 5))
-        metrics_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
-        original_vals = [
-            metrics_original['Accuracy'],
-            metrics_original['Precision'],
-            metrics_original['Recall'],
-            metrics_original['F1-Score']
-        ]
-        smote_vals = [
-            metrics_smote['Accuracy'],
-            metrics_smote['Precision'],
-            metrics_smote['Recall'],
-            metrics_smote['F1-Score']
-        ]
-        
-        x = np.arange(len(metrics_names))
-        width = 0.35
-        
-        bars1 = ax.bar(x - width/2, original_vals, width, label='Original', color='#1f77b4')
-        bars2 = ax.bar(x + width/2, smote_vals, width, label='SMOTE', color='#2ca02c')
-        
-        ax.set_ylabel('Score')
-        ax.set_title('Metrics Comparison: Original vs SMOTE')
-        ax.set_xticks(x)
-        ax.set_xticklabels(metrics_names, rotation=45, ha='right')
-        ax.legend()
-        ax.grid(axis='y', alpha=0.3)
-        ax.set_ylim([0, 1.1])
-        
-        # Add value labels on bars
+        # Add value labels
         for bars in [bars1, bars2]:
             for bar in bars:
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.3f}', ha='center', va='bottom', fontsize=8)
+                       f'{int(height):,}', ha='center', va='bottom', fontsize=9, fontweight=600)
         
         plt.tight_layout()
         st.pyplot(fig)
     
     with col2:
-        fig, ax = plt.subplots(figsize=(8, 5))
+        st.markdown("#### Imbalance Ratio Reduction")
+        fig, ax = plt.subplots(figsize=(7, 5))
         
-        improvements = [
-            (metrics_smote['Accuracy'] - metrics_original['Accuracy']) * 100,
-            (metrics_smote['Precision'] - metrics_original['Precision']) * 100,
-            (metrics_smote['Recall'] - metrics_original['Recall']) * 100,
-            (metrics_smote['F1-Score'] - metrics_original['F1-Score']) * 100
-        ]
+        before_ratio_str = smote_info['Original Ratio']
+        after_ratio_str = smote_info['SMOTE Ratio']
         
-        colors = ['#2ca02c' if x >= 0 else '#d62728' for x in improvements]
-        bars = ax.barh(metrics_names, improvements, color=colors)
+        before_ratio_val = float(before_ratio_str.split(':')[0])
+        after_ratio_val = float(after_ratio_str.split(':')[0])
         
-        ax.set_xlabel('Improvement (%)')
-        ax.set_title('Performance Improvement with SMOTE')
-        ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
-        ax.grid(axis='x', alpha=0.3)
+        ratios = [before_ratio_val, after_ratio_val]
+        labels = [f'Before\n({before_ratio_str})', f'After\n({after_ratio_str})']
+        colors = ['#ff6b6b', '#51cf66']
+        
+        bars = ax.bar(labels, ratios, color=colors, alpha=0.8, edgecolor='black', linewidth=1.2, width=0.6)
+        
+        ax.set_ylabel('Imbalance Ratio (Majority/Minority)', fontweight=600, fontsize=11)
+        ax.set_title('Imbalance Ratio Reduction', fontweight=600, fontsize=12)
+        ax.axhline(y=1, color='red', linestyle='--', linewidth=2, alpha=0.7, label='Perfect Balance (1:1)')
+        ax.legend(fontsize=10)
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
         
         # Add value labels
-        for bar, val in zip(bars, improvements):
-            ax.text(val, bar.get_y() + bar.get_height()/2.,
-                   f'{val:.2f}%', ha='left' if val >= 0 else 'right',
-                   va='center', fontsize=9)
+        for bar, ratio in zip(bars, ratios):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{ratio:.2f}:1', ha='center', va='bottom', fontsize=11, fontweight=600)
         
         plt.tight_layout()
         st.pyplot(fig)
     
-    # Key Insights
-    st.subheader("📝 Key Insights")
+    # Success insight
+    reduction_pct = ((before_ratio_val - after_ratio_val) / before_ratio_val * 100) if before_ratio_val > 0 else 0
+    st.markdown(f"""
+    <div class="success-box">
+    <strong>✅ SMOTE Successfully Applied:</strong><br>
+    Created {smote_info['Samples Added']:,} synthetic minority samples, reducing imbalance ratio from 
+    <code>{before_ratio_str}</code> to <code>{after_ratio_str}</code> (<strong>{reduction_pct:.1f}% reduction</strong>).
+    Training data is now better balanced, allowing models to learn minority class patterns.
+    </div>
+    """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    # ======== SECTION 4: PRE-TRAINED MODEL PERFORMANCE (SMOTE-BALANCED DATA) ========
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('### 🤖 Section 4: Improved Model Performance (SMOTE-Balanced Data)')
+    
+    st.markdown("""
+    After applying SMOTE, we retrain the model on the balanced training data and evaluate 
+    performance on the same test set. This demonstrates the impact of balanced training on 
+    both majority and minority class detection rates.
+    """)
+    
+    # Key metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    metrics_smote = st.session_state.metrics_smote
     
     with col1:
-        recall_improvement = (metrics_smote['Recall'] - metrics_original['Recall']) * 100
-        st.info(f"**Recall Improvement:** {recall_improvement:+.2f}%\n\n"
-               f"SMOTE significantly improves minority class detection!")
+        st.metric(
+            "Accuracy",
+            f"{metrics_smote['Accuracy']:.4f}",
+            delta=f"{(metrics_smote['Accuracy'] - st.session_state.metrics_original['Accuracy']):.4f}"
+        )
+    with col2:
+        st.metric(
+            "Precision",
+            f"{metrics_smote['Precision']:.4f}",
+            delta=f"{(metrics_smote['Precision'] - st.session_state.metrics_original['Precision']):.4f}"
+        )
+    with col3:
+        st.metric(
+            "Recall",
+            f"{metrics_smote['Recall']:.4f}",
+            delta=f"{(metrics_smote['Recall'] - st.session_state.metrics_original['Recall']):.4f}"
+        )
+    with col4:
+        st.metric(
+            "F1-Score",
+            f"{metrics_smote['F1-Score']:.4f}",
+            delta=f"{(metrics_smote['F1-Score'] - st.session_state.metrics_original['F1-Score']):.4f}"
+        )
+    with col5:
+        st.metric(
+            "ROC-AUC",
+            f"{metrics_smote.get('ROC-AUC', 0.0):.4f}",
+            delta=f"{(metrics_smote.get('ROC-AUC', 0.0) - st.session_state.metrics_original.get('ROC-AUC', 0.0)):.4f}"
+        )
+    
+    # Analysis details
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("#### Confusion Matrix")
+        cm_smote = st.session_state.metrics_smote['Confusion Matrix']
+        
+        fig, ax = plt.subplots(figsize=(6, 5))
+        sns.heatmap(cm_smote, annot=True, fmt='d', cmap='Greens', 
+                   xticklabels=['Negative (0)', 'Positive (1)'],
+                   yticklabels=['Negative (0)', 'Positive (1)'],
+                   cbar_kws={'label': 'Count'},
+                   ax=ax, linewidths=1, linecolor='gray')
+        ax.set_ylabel('True Label', fontweight=600)
+        ax.set_xlabel('Predicted Label', fontweight=600)
+        ax.set_title('SMOTE-Balanced Model Confusion Matrix', fontweight=600, fontsize=12)
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Interpretation
+        cm_smote_array = np.array(cm_smote)
+        tn, fp, fn, tp = cm_smote_array.ravel()
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        
+        st.markdown(f"""
+        **Confusion Matrix Breakdown:**
+        - **True Negatives (TN):** {tn} - Correctly identified majority examples
+        - **False Positives (FP):** {fp} - Majority misclassified as minority
+        - **False Negatives (FN):** {fn} - Minority missed (significantly reduced!)
+        - **True Positives (TP):** {tp} - Correctly identified minority examples
+        
+        **Sensitivity (Recall):** {sensitivity:.4f} | **Specificity:** {specificity:.4f}
+        """)
     
     with col2:
-        f1_improvement = (metrics_smote['F1-Score'] - metrics_original['F1-Score']) * 100
-        st.info(f"**F1-Score Improvement:** {f1_improvement:+.2f}%\n\n"
-               f"Better balance between precision and recall!")
-    
-    with col3:
-        samples_added = smote_info['Samples Added']
-        st.info(f"**Samples Generated:** {samples_added}\n\n"
-               f"SMOTE created synthetic minority samples!")
-    
-    # ======== SECTION 6: GAN COMPARISON (Optional) ========
-    if st.session_state.compare_with_gan:
-        st.header("🎨 Section 6: Comparison with GAN-Based Balancing")
+        st.markdown("#### Performance Metrics Table")
+        if "metrics_df_smote" in st.session_state:
+            st.dataframe(st.session_state.metrics_df_smote, use_container_width=True, hide_index=True)
+        else:
+            metrics_df_smote = ModelEvaluator.get_metrics_dataframe(st.session_state.metrics_smote)
+            st.dataframe(metrics_df_smote, use_container_width=True, hide_index=True)
         
-        with st.spinner("Training GAN model (this may take a moment)..."):
-            model_gan, y_pred_gan, y_pred_proba_gan, metrics_gan = apply_gan_to_data(
-                st.session_state.X_train, 
-                st.session_state.y_train,
-                st.session_state.X_test,
-                st.session_state.y_test,
-                st.session_state.model_type_key
+        # Add insight
+        if metrics_smote['Recall'] > st.session_state.metrics_original['Recall']:
+            st.markdown("""
+            <div class="success-box">
+            <strong>✅ Significant Improvement:</strong> SMOTE training substantially improved 
+            minority class recall. The model now catches more minority instances that would have 
+            been missed on imbalanced data.
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # ======== SECTION 5: PERFORMANCE COMPARISON ========
+    if st.session_state.compare_techniques:
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+        st.markdown('### 📈 Section 5: Comprehensive Performance Comparison')
+        
+        st.markdown("""
+        This section provides a detailed side-by-side comparison of model performance between 
+        the original imbalanced approach and the SMOTE-balanced approach across all key metrics.
+        """)
+        
+        st.markdown("#### Detailed Metrics Comparison")
+        if "comparison_df" in st.session_state:
+            st.dataframe(st.session_state.comparison_df, use_container_width=True, hide_index=True)
+        else:
+            comparison_df = ModelEvaluator.compare_metrics(
+                st.session_state.metrics_original, 
+                st.session_state.metrics_smote, 
+                "SMOTE"
             )
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
         
-        # GAN metrics display
-        st.subheader("GAN Model Performance")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Accuracy", f"{metrics_gan['Accuracy']:.4f}")
-        with col2:
-            st.metric("Precision", f"{metrics_gan['Precision']:.4f}")
-        with col3:
-            st.metric("Recall", f"{metrics_gan['Recall']:.4f}")
-        with col4:
-            st.metric("F1-Score", f"{metrics_gan['F1-Score']:.4f}")
-        
-        # Three-way comparison
-        st.subheader("Three-Way Performance Comparison")
-        
-        comparison_three_way = pd.DataFrame({
-            "Metric": ["Accuracy", "Precision", "Recall", "F1-Score"],
-            "Original": [
-                f"{metrics_original['Accuracy']:.4f}",
-                f"{metrics_original['Precision']:.4f}",
-                f"{metrics_original['Recall']:.4f}",
-                f"{metrics_original['F1-Score']:.4f}"
-            ],
-            "SMOTE": [
-                f"{metrics_smote['Accuracy']:.4f}",
-                f"{metrics_smote['Precision']:.4f}",
-                f"{metrics_smote['Recall']:.4f}",
-                f"{metrics_smote['F1-Score']:.4f}"
-            ],
-            "GAN": [
-                f"{metrics_gan['Accuracy']:.4f}",
-                f"{metrics_gan['Precision']:.4f}",
-                f"{metrics_gan['Recall']:.4f}",
-                f"{metrics_gan['F1-Score']:.4f}"
-            ]
-        })
-        
-        st.dataframe(comparison_three_way, use_container_width=True, hide_index=True)
-        
-        # Visualization
+        # Visualization - Grouped comparison
         col1, col2 = st.columns(2)
         
         with col1:
-            fig, ax = plt.subplots(figsize=(8, 5))
-            
-            metrics_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+            st.markdown("#### Metrics Comparison Chart")
+            fig, ax = plt.subplots(figsize=(9, 6))
+            metrics_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']
             original_vals = [
-                metrics_original['Accuracy'],
-                metrics_original['Precision'],
-                metrics_original['Recall'],
-                metrics_original['F1-Score']
+                st.session_state.metrics_original['Accuracy'],
+                st.session_state.metrics_original['Precision'],
+                st.session_state.metrics_original['Recall'],
+                st.session_state.metrics_original['F1-Score'],
+                st.session_state.metrics_original.get('ROC-AUC', 0.0)
             ]
             smote_vals = [
-                metrics_smote['Accuracy'],
-                metrics_smote['Precision'],
-                metrics_smote['Recall'],
-                metrics_smote['F1-Score']
-            ]
-            gan_vals = [
-                metrics_gan['Accuracy'],
-                metrics_gan['Precision'],
-                metrics_gan['Recall'],
-                metrics_gan['F1-Score']
-            ]
-            
-            x = np.arange(len(metrics_names))
-            width = 0.25
-            
-            ax.bar(x - width, original_vals, width, label='Original', color='#1f77b4')
-            ax.bar(x, smote_vals, width, label='SMOTE', color='#2ca02c')
-            ax.bar(x + width, gan_vals, width, label='GAN', color='#d62728')
-            
-            ax.set_ylabel('Score')
-            ax.set_title('Metrics Comparison: Original vs SMOTE vs GAN')
-            ax.set_xticks(x)
-            ax.set_xticklabels(metrics_names, rotation=45, ha='right')
-            ax.legend()
-            ax.grid(axis='y', alpha=0.3)
-            ax.set_ylim([0, 1.1])
-            
-            plt.tight_layout()
-            st.pyplot(fig)
-        
-        with col2:
-            fig, ax = plt.subplots(figsize=(8, 5))
-            
-            smote_improvements = [
-                (metrics_smote['Accuracy'] - metrics_original['Accuracy']) * 100,
-                (metrics_smote['Precision'] - metrics_original['Precision']) * 100,
-                (metrics_smote['Recall'] - metrics_original['Recall']) * 100,
-                (metrics_smote['F1-Score'] - metrics_original['F1-Score']) * 100
-            ]
-            
-            gan_improvements = [
-                (metrics_gan['Accuracy'] - metrics_original['Accuracy']) * 100,
-                (metrics_gan['Precision'] - metrics_original['Precision']) * 100,
-                (metrics_gan['Recall'] - metrics_original['Recall']) * 100,
-                (metrics_gan['F1-Score'] - metrics_original['F1-Score']) * 100
+                st.session_state.metrics_smote['Accuracy'],
+                st.session_state.metrics_smote['Precision'],
+                st.session_state.metrics_smote['Recall'],
+                st.session_state.metrics_smote['F1-Score'],
+                st.session_state.metrics_smote.get('ROC-AUC', 0.0)
             ]
             
             x = np.arange(len(metrics_names))
             width = 0.35
             
-            ax.bar(x - width/2, smote_improvements, width, label='SMOTE', color='#2ca02c')
-            ax.bar(x + width/2, gan_improvements, width, label='GAN', color='#d62728')
+            bars1 = ax.bar(x - width/2, original_vals, width, label='Original (Imbalanced)',
+                          color='#667eea', alpha=0.8, edgecolor='black', linewidth=1.2)
+            bars2 = ax.bar(x + width/2, smote_vals, width, label='SMOTE (Balanced)',
+                          color='#51cf66', alpha=0.8, edgecolor='black', linewidth=1.2)
             
-            ax.set_ylabel('Improvement (%)')
-            ax.set_title('Improvement Over Original Model')
+            ax.set_ylabel('Score', fontweight=600, fontsize=11)
+            ax.set_title('Original vs SMOTE: All Metrics', fontweight=600, fontsize=12)
             ax.set_xticks(x)
-            ax.set_xticklabels(metrics_names, rotation=45, ha='right')
-            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
-            ax.legend()
-            ax.grid(axis='y', alpha=0.3)
+            ax.set_xticklabels(metrics_names, rotation=45, ha='right', fontsize=10)
+            ax.legend(fontsize=10)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.set_ylim([0, 1.15])
+            
+            # Add value labels on bars
+            for bars in [bars1, bars2]:
+                for bar in bars:
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height,
+                           f'{height:.3f}', ha='center', va='bottom', fontsize=8, fontweight=600)
             
             plt.tight_layout()
             st.pyplot(fig)
         
-        # Final Conclusion
-        st.header("🎯 Final Conclusion: SMOTE vs GAN")
+        with col2:
+            st.markdown("#### Performance Improvement Visualization")
+            fig, ax = plt.subplots(figsize=(9, 6))
+            
+            improvements = [
+                (st.session_state.metrics_smote['Accuracy'] - st.session_state.metrics_original['Accuracy']) * 100,
+                (st.session_state.metrics_smote['Precision'] - st.session_state.metrics_original['Precision']) * 100,
+                (st.session_state.metrics_smote['Recall'] - st.session_state.metrics_original['Recall']) * 100,
+                (st.session_state.metrics_smote['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100,
+                (st.session_state.metrics_smote.get('ROC-AUC', 0.0) - st.session_state.metrics_original.get('ROC-AUC', 0.0)) * 100
+            ]
+            
+            colors = ['#51cf66' if x >= 0 else '#ff6b6b' for x in improvements]
+            bars = ax.barh(metrics_names, improvements, color=colors, alpha=0.8, edgecolor='black', linewidth=1.2)
+            
+            ax.set_xlabel('Improvement (%)', fontweight=600, fontsize=11)
+            ax.set_title('SMOTE Performance Improvement', fontweight=600, fontsize=12)
+            ax.axvline(x=0, color='black', linestyle='-', linewidth=1.5)
+            ax.grid(axis='x', alpha=0.3, linestyle='--')
+            
+            # Add value labels
+            for bar, val in zip(bars, improvements):
+                x_pos = val + (1 if val >= 0 else -1)
+                ax.text(x_pos, bar.get_y() + bar.get_height()/2.,
+                       f'{val:+.2f}%', ha='left' if val >= 0 else 'right',
+                       va='center', fontsize=10, fontweight=600)
+            
+            plt.tight_layout()
+            st.pyplot(fig)
         
-        # Determine winner based on F1-score
-        smote_f1 = metrics_smote['F1-Score']
-        gan_f1 = metrics_gan['F1-Score']
-        original_f1 = metrics_original['F1-Score']
+        # Summary insights
+        avg_improvement = np.mean([improvements[i] for i in range(len(improvements)) if i != 0])  # Exclude accuracy
         
-        col1, col2 = st.columns(2)
+        if avg_improvement > 0:
+            insight_text = f"SMOTE training significantly improved recall-oriented metrics by an average of {avg_improvement:.1f}%, " \
+                          f"making the model much more reliable for minority class detection."
+            col_insight = st.columns([1])[0]
+            st.markdown(f"""
+            <div class="success-box">
+            <strong>✅ Comprehensive Improvement:</strong><br>
+            {insight_text} This is particularly valuable for applications where missing minority instances 
+            is costly (fraud detection, disease diagnosis, anomaly detection).
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="insight-box">
+            <strong>📊 Comparative Analysis:</strong><br>
+            The models show different trade-offs. Original model prioritizes majority accuracy 
+            while SMOTE model improves minority class detection (Recall). The choice depends on 
+            your application's specific requirements.
+            </div>
+            """, unsafe_allow_html=True)
+            st.pyplot(fig)
+        
+        # Key Insights
+        st.subheader("📝 Key Insights")
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.subheader("SMOTE Advantages:")
-            st.markdown("""
-            - ✅ **Fast Training:** SMOTE is computationally efficient
-            - ✅ **Deterministic:** Creates oversamples based on interpolation
-            - ✅ **Interpretable:** Clear methodology for synthetic sample generation
-            - ✅ **Stable:** Consistent results across runs
-            - ✅ **Low Risk:** Less prone to overfitting
-            """)
+            recall_improvement = (st.session_state.metrics_smote['Recall'] - st.session_state.metrics_original['Recall']) * 100
+            st.info(f"**Recall Improvement:** {recall_improvement:+.2f}%\n\n"
+                   f"SMOTE significantly improves minority class detection!")
         
         with col2:
-            st.subheader("GAN Advantages:")
-            st.markdown("""
-            - ✅ **High Quality:** Creates realistic complex synthetic samples
-            - ✅ **Flexible:** Can learn complex data distributions
-            - ✅ **Modern:** Uses deep learning for sample generation
-            - ✅ **Scalable:** Works well with high-dimensional data
-            - ✅ **Creative:** Generates diverse samples
-            """)
+            f1_improvement = (st.session_state.metrics_smote['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100
+            st.info(f"**F1-Score Improvement:** {f1_improvement:+.2f}%\n\n"
+                   f"Better balance between precision and recall!")
         
-        st.markdown("---")
-        
-        # Recommendation with robust percentage calculation
-        if smote_f1 > gan_f1:
-            recommendation = "SMOTE"
-            absolute_diff = (smote_f1 - gan_f1) * 100  # Convert to percentage points
-            relative_pct = ((smote_f1 - gan_f1) / gan_f1) * 100
-            # Cap relative percentage at 100% for display
-            relative_pct_capped = min(relative_pct, 100)
-            better_text = "in favor of SMOTE"
-        else:
-            recommendation = "GAN"
-            absolute_diff = (gan_f1 - smote_f1) * 100  # Convert to percentage points
-            relative_pct = ((gan_f1 - smote_f1) / smote_f1) * 100
-            # Cap relative percentage at 100% for display
-            relative_pct_capped = min(relative_pct, 100)
-            better_text = "in favor of GAN"
-        
-        # Calculate improvements over original
-        smote_improvement = ((smote_f1 - original_f1) / original_f1) * 100
-        gan_improvement = ((gan_f1 - original_f1) / original_f1) * 100
-        
-        # Cap improvements at 100% for display
-        smote_improvement_capped = min(smote_improvement, 100)
-        gan_improvement_capped = min(gan_improvement, 100)
-        
-        st.success(f"""
-        ### 📌 Recommendation: **{recommendation}** is the better choice
-        
-        **F1-Score Comparison:**
-        - Original Model: **{original_f1:.4f}**
-        - SMOTE: **{smote_f1:.4f}** (improvement: {smote_improvement_capped:.1f}%)
-        - GAN: **{gan_f1:.4f}** (improvement: {gan_improvement_capped:.1f}%)
-        
-        **Performance Margin:** {absolute_diff:.2f} percentage points {better_text}
-        
+        with col3:
+            st.info(f"**SMOTE Advantage:**\n\nPre-trained models allow instant comparison without training delays!")
+    
+    # ======== SECTION 6: GAN COMPARISON ========
+    st.header("🎨 Section 6: Advanced GAN Comparison")
+    
+    st.markdown("""
+    GAN (Generative Adversarial Network) models provide another approach to handling class imbalance.
+    If you want to see how GAN compares to SMOTE, you can train GAN models on-demand.
+    
+    **Note:** GAN training takes 1-3 minutes per dataset depending on size.
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.info("""
+        **SMOTE vs GAN:**
+        - **SMOTE:** Fast, deterministic, stable
+        - **GAN:** Complex, flexible, may generate higher-quality samples
         """)
+    
+    with col2:
+        train_gan = st.checkbox(
+            "🎨 Train GAN Models for Comparison",
+            value=False,
+            help="Enable GAN training (adds 1-3 minutes)"
+        )
+    
+    if train_gan:
+        st.warning("⏳ GAN training is in progress. This may take several minutes...")
         
-        if recommendation == "SMOTE":
-            st.info("""
-            SMOTE is the better choice for this use case because:
+        with st.spinner("Training GAN models..."):
+            try:
+                from utils.gan_handler import GANHandler
+                
+                # Train GAN and get results
+                gan_handler = GANHandler(epochs=30, random_state=42)
+                X_train_gan, y_train_gan, _ = gan_handler.apply_gan(
+                    st.session_state.X_train, 
+                    st.session_state.y_train, 
+                    verbose=False
+                )
+                
+                # Train model on GAN data
+                from utils.models import ClassificationModel
+                model_gan = ClassificationModel(
+                    model_type=st.session_state.model_type_key,
+                    random_state=42
+                )
+                model_gan.train(X_train_gan, y_train_gan)
+                
+                # Get predictions
+                y_pred_gan, y_pred_proba_gan = predict_with_model(model_gan, st.session_state.X_test)
+                metrics_gan = ModelEvaluator.evaluate(st.session_state.y_test, y_pred_gan, y_pred_proba_gan)
+                
+                st.session_state.metrics_gan = metrics_gan
+                st.session_state.model_gan = model_gan
+                st.session_state.y_pred_gan = y_pred_gan
+                st.session_state.gan_trained = True
+                
+                st.success("✅ GAN training complete!")
+            except Exception as e:
+                st.error(f"❌ GAN training failed: {str(e)}")
+        
+        if st.session_state.get('gan_trained', False):
+            st.subheader("🎨 GAN Model Performance")
             
-            1. **Efficiency:** Much faster to train and deploy
-            2. **Stability:** Produces consistent, reproducible results
-            3. **Performance:** Achieves comparable or better F1-score
-            4. **Maintainability:** Easier to understand and maintain
-            5. **Resource Usage:** Lower computational requirements
+            col1, col2, col3, col4 = st.columns(4)
             
-            **When to consider GAN instead:**
-            - When you have very high-dimensional data (>100 features)
-            - When you need maximum sample quality and realism
-            - When computational resources are not a constraint
-            - When working with complex, non-linear data distributions
+            with col1:
+                st.metric("Accuracy", f"{st.session_state.metrics_gan['Accuracy']:.4f}")
+            with col2:
+                st.metric("Precision", f"{st.session_state.metrics_gan['Precision']:.4f}")
+            with col3:
+                st.metric("Recall", f"{st.session_state.metrics_gan['Recall']:.4f}")
+            with col4:
+                st.metric("F1-Score", f"{st.session_state.metrics_gan['F1-Score']:.4f}")
+            
+            # Three-way comparison
+            st.subheader("📊 Three-Way Performance Comparison")
+            
+            comparison_three_way = pd.DataFrame({
+                "Metric": ["Accuracy", "Precision", "Recall", "F1-Score"],
+                "Original": [
+                    f"{st.session_state.metrics_original['Accuracy']:.4f}",
+                    f"{st.session_state.metrics_original['Precision']:.4f}",
+                    f"{st.session_state.metrics_original['Recall']:.4f}",
+                    f"{st.session_state.metrics_original['F1-Score']:.4f}"
+                ],
+                "SMOTE": [
+                    f"{st.session_state.metrics_smote['Accuracy']:.4f}",
+                    f"{st.session_state.metrics_smote['Precision']:.4f}",
+                    f"{st.session_state.metrics_smote['Recall']:.4f}",
+                    f"{st.session_state.metrics_smote['F1-Score']:.4f}"
+                ],
+                "GAN": [
+                    f"{st.session_state.metrics_gan['Accuracy']:.4f}",
+                    f"{st.session_state.metrics_gan['Precision']:.4f}",
+                    f"{st.session_state.metrics_gan['Recall']:.4f}",
+                    f"{st.session_state.metrics_gan['F1-Score']:.4f}"
+                ]
+            })
+            
+            st.dataframe(comparison_three_way, use_container_width=True, hide_index=True)
+            
+            # Visualization
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                
+                metrics_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+                original_vals = [
+                    st.session_state.metrics_original['Accuracy'],
+                    st.session_state.metrics_original['Precision'],
+                    st.session_state.metrics_original['Recall'],
+                    st.session_state.metrics_original['F1-Score']
+                ]
+                smote_vals = [
+                    st.session_state.metrics_smote['Accuracy'],
+                    st.session_state.metrics_smote['Precision'],
+                    st.session_state.metrics_smote['Recall'],
+                    st.session_state.metrics_smote['F1-Score']
+                ]
+                gan_vals = [
+                    st.session_state.metrics_gan['Accuracy'],
+                    st.session_state.metrics_gan['Precision'],
+                    st.session_state.metrics_gan['Recall'],
+                    st.session_state.metrics_gan['F1-Score']
+                ]
+                
+                x = np.arange(len(metrics_names))
+                width = 0.25
+                
+                ax.bar(x - width, original_vals, width, label='Original', color='#1f77b4')
+                ax.bar(x, smote_vals, width, label='SMOTE', color='#2ca02c')
+                ax.bar(x + width, gan_vals, width, label='GAN', color='#d62728')
+                
+                ax.set_ylabel('Score')
+                ax.set_title('Three-Way Comparison: Original vs SMOTE vs GAN')
+                ax.set_xticks(x)
+                ax.set_xticklabels(metrics_names, rotation=45, ha='right')
+                ax.legend()
+                ax.grid(axis='y', alpha=0.3)
+                ax.set_ylim([0, 1.1])
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+            
+            with col2:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                
+                smote_improvements = [
+                    (st.session_state.metrics_smote['Accuracy'] - st.session_state.metrics_original['Accuracy']) * 100,
+                    (st.session_state.metrics_smote['Precision'] - st.session_state.metrics_original['Precision']) * 100,
+                    (st.session_state.metrics_smote['Recall'] - st.session_state.metrics_original['Recall']) * 100,
+                    (st.session_state.metrics_smote['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100
+                ]
+                
+                gan_improvements = [
+                    (st.session_state.metrics_gan['Accuracy'] - st.session_state.metrics_original['Accuracy']) * 100,
+                    (st.session_state.metrics_gan['Precision'] - st.session_state.metrics_original['Precision']) * 100,
+                    (st.session_state.metrics_gan['Recall'] - st.session_state.metrics_original['Recall']) * 100,
+                    (st.session_state.metrics_gan['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100
+                ]
+                
+                x = np.arange(len(metrics_names))
+                width = 0.35
+                
+                ax.bar(x - width/2, smote_improvements, width, label='SMOTE', color='#2ca02c')
+                ax.bar(x + width/2, gan_improvements, width, label='GAN', color='#d62728')
+                
+                ax.set_ylabel('Improvement (%)')
+                ax.set_title('Improvement Over Original Model')
+                ax.set_xticks(x)
+                ax.set_xticklabels(metrics_names, rotation=45, ha='right')
+                ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+                ax.legend()
+                ax.grid(axis='y', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+            
+            # Recommendation
+            st.header("🎯 SMOTE vs GAN Recommendation")
+            
+            smote_f1 = st.session_state.metrics_smote['F1-Score']
+            gan_f1 = st.session_state.metrics_gan['F1-Score']
+            original_f1 = st.session_state.metrics_original['F1-Score']
+            
+            if smote_f1 > gan_f1:
+                recommendation = "SMOTE"
+                difference = (smote_f1 - gan_f1) * 100
+            else:
+                recommendation = "GAN"
+                difference = (gan_f1 - smote_f1) * 100
+            
+            st.success(f"""
+            ### 📌 Recommendation: **{recommendation}** performs better
+            
+            **F1-Score Comparison:**
+            - Original: {original_f1:.4f}
+            - SMOTE: {smote_f1:.4f}
+            - GAN: {gan_f1:.4f}
+            
+            **Winner's Advantage:** {difference:.2f} percentage points
             """)
-        else:
-            st.info(f"""
-            GAN is the better choice for this use case because:
             
-            1. **Superior Performance:** {absolute_diff:.2f} percentage points better F1-score
-            2. **Quality:** Generates more sophisticated synthetic samples
-            3. **Adaptability:** Better captures complex data patterns
-            4. **Consistency:** More balanced learning of data distribution
+            col1, col2 = st.columns(2)
             
-            **However, consider SMOTE if:**
-            - Training time is critical for your application
-            - You need guaranteed reproducibility
-            - Computational resources are limited
-            - F1-score difference is marginal (<2%)
-            """)
+            with col1:
+                st.subheader("SMOTE Strengths")
+                st.markdown("""
+                ✅ Fast training (seconds)\n
+                ✅ Deterministic results\n
+                ✅ Easy to interpret\n
+                ✅ Low computational overhead
+                """)
+            
+            with col2:
+                st.subheader("GAN Strengths")
+                st.markdown("""
+                ✅ Complex pattern learning\n
+                ✅ High-quality samples\n
+                ✅ Flexible approach\n
+                ✅ Modern deep learning
+                """)
+    
+    # ======== SUMMARY ========
+    st.header("✅ Analysis Summary")
+    
+    st.markdown(f"""
+    ### Dataset: {st.session_state.selected_dataset}
+    ### Model: {st.session_state.model_type}
+    
+    **Key Findings:**
+    
+    The analysis demonstrates how SMOTE balancing improves model performance on imbalanced datasets.
+    Pre-trained models allow for instant comparison without computational overhead.
+    
+    **Next Steps:**
+    - Try different datasets to see how SMOTE performs
+    - Compare model types (Random Forest vs Logistic Regression)
+    - Analyze which techniques work best for different imbalance ratios
+    """)
 
 else:
-    st.info("👈 Configure your simulation settings above and click the 'Run Simulation' button to start!")
+    st.info("👈 Configure your analysis settings above and click the 'Run Analysis' button to start!")
 
 # Footer
 st.markdown("---")
