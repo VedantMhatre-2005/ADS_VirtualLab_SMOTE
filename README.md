@@ -42,7 +42,7 @@ This interactive virtual lab provides a complete pipeline for:
 ## 📦 Installation
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.10 (required for TensorFlow GAN implementation)
 - pip or conda
 
 ### Setup

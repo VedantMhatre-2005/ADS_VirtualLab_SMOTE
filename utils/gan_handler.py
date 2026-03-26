@@ -3,17 +3,23 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from collections import Counter
 import warnings
+import os
 
+# Suppress TensorFlow and related warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
 try:
     import tensorflow as tf
+    # Suppress TensorFlow verbose output
+    tf.get_logger().setLevel('ERROR')
     from tensorflow import keras
     from tensorflow.keras import layers, Model
     from tensorflow.keras.optimizers import Adam
     TF_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TF_AVAILABLE = False
+    TF_ERROR = str(e)
 
 
 class SimpleGAN:
@@ -218,7 +224,11 @@ class GANHandler:
     def __init__(self, epochs=50, random_state=42):
         """Initialize GAN handler."""
         if not TF_AVAILABLE:
-            raise ImportError("TensorFlow is required for GAN functionality. Install it with: pip install tensorflow>=2.13.0,<2.14.0")
+            error_msg = "TensorFlow is required for GAN functionality."
+            if 'TF_ERROR' in globals():
+                error_msg += f" Import error: {TF_ERROR}"
+            error_msg += " Install with: pip install -r requirements.txt"
+            raise ImportError(error_msg)
         
         self.gan = SimpleGAN(epochs=epochs, random_state=random_state)
         self.epochs = epochs
