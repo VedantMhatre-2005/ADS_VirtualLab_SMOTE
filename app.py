@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +10,8 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+import streamlit as st
+
 # Set page config FIRST (before any other Streamlit calls)
 st.set_page_config(
     page_title="SMOTE Virtual Lab",
@@ -18,6 +19,21 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Apply Google Sans globally
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+    
+    * {
+        font-family: 'Roboto', sans-serif !important;
+    }
+    
+    html, body, [class*="css"] {
+        font-family: 'Roboto', sans-serif !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Initialize model loader
 @st.cache_resource
@@ -101,6 +117,14 @@ if st.sidebar.button("🎯 Objective", use_container_width=True, key="goals_btn"
 
 if st.sidebar.button("🔬 Simulation", use_container_width=True, key="sim_btn"):
     st.session_state.current_page = 'simulation'
+    st.rerun()
+
+if st.sidebar.button("📝 Quiz", use_container_width=True, key="quiz_btn"):
+    st.session_state.current_page = 'quiz'
+    st.rerun()
+
+if st.sidebar.button("📚 References", use_container_width=True, key="ref_btn"):
+    st.session_state.current_page = 'references'
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -874,11 +898,7 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     
     with col2:
         st.markdown("#### Performance Metrics Table")
-        if "metrics_df_original" in st.session_state:
-            st.dataframe(st.session_state.metrics_df_original, use_container_width=True, hide_index=True)
-        else:
-            metrics_df = ModelEvaluator.get_metrics_dataframe(st.session_state.metrics_original)
-            st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+        st.dataframe(st.session_state.metrics_df_original, use_container_width=True, hide_index=True)
         
         # Add insight
         if metrics_original['Recall'] < 0.6:
@@ -920,29 +940,11 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     
     with col1:
         st.markdown("#### Class Distribution Before & After SMOTE")
-        if "dist_df" in st.session_state:
-            st.dataframe(st.session_state.dist_df, use_container_width=True, hide_index=True)
-        else:
-            dist_df = SMOTEHandler.get_distribution_dataframe(
-                st.session_state.y_train, 
-                y_train_smote
-            )
-            st.dataframe(dist_df, use_container_width=True, hide_index=True)
+        st.dataframe(st.session_state.dist_df, use_container_width=True, hide_index=True)
     
     with col2:
         st.markdown("#### SMOTE Application Summary")
-        if "details_df" in st.session_state:
-            st.dataframe(st.session_state.details_df, use_container_width=True, hide_index=True)
-        else:
-            details = pd.DataFrame({
-                "Metric": ["Synthetic Samples Created", "Original Imbalance Ratio", "Post-SMOTE Ratio"],
-                "Value": [
-                    str(smote_info['Samples Added']),
-                    smote_info['Original Ratio'],
-                    smote_info['SMOTE Ratio']
-                ]
-            })
-            st.dataframe(details, use_container_width=True, hide_index=True)
+        st.dataframe(st.session_state.details_df, use_container_width=True, hide_index=True)
     
     # Visualization - Class distribution comparison
     col1, col2 = st.columns(2)
@@ -1110,11 +1112,7 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     
     with col2:
         st.markdown("#### Performance Metrics Table")
-        if "metrics_df_smote" in st.session_state:
-            st.dataframe(st.session_state.metrics_df_smote, use_container_width=True, hide_index=True)
-        else:
-            metrics_df_smote = ModelEvaluator.get_metrics_dataframe(st.session_state.metrics_smote)
-            st.dataframe(metrics_df_smote, use_container_width=True, hide_index=True)
+        st.dataframe(st.session_state.metrics_df_smote, use_container_width=True, hide_index=True)
         
         # Add insight
         if metrics_smote['Recall'] > st.session_state.metrics_original['Recall']:
@@ -1137,15 +1135,7 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
         """)
         
         st.markdown("#### Detailed Metrics Comparison")
-        if "comparison_df" in st.session_state:
-            st.dataframe(st.session_state.comparison_df, use_container_width=True, hide_index=True)
-        else:
-            comparison_df = ModelEvaluator.compare_metrics(
-                st.session_state.metrics_original, 
-                st.session_state.metrics_smote, 
-                "SMOTE"
-            )
-            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+        st.dataframe(st.session_state.comparison_df, use_container_width=True, hide_index=True)
         
         # Visualization - Grouped comparison
         col1, col2 = st.columns(2)
@@ -1273,9 +1263,13 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     
     st.markdown("""
     GAN (Generative Adversarial Network) models provide another approach to handling class imbalance.
-    If you want to see how GAN compares to SMOTE, you can train GAN models on-demand.
+    Train and compare GAN-based data synthesis with SMOTE in an interactive Google Colab notebook!
     
-    **Note:** GAN training takes 1-3 minutes per dataset depending on size.
+    **Why Google Colab?**
+    - 🚀 Access to GPU resources for faster GAN training
+    - 📊 Full interactive exploration and visualization
+    - 💾 Save your own results and experiments
+    - 🔧 Customize GAN parameters as needed
     """)
     
     col1, col2 = st.columns(2)
@@ -1283,216 +1277,45 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     with col1:
         st.info("""
         **SMOTE vs GAN:**
-        - **SMOTE:** Fast, deterministic, stable
-        - **GAN:** Complex, flexible, may generate higher-quality samples
+        - **SMOTE:** Fast ⚡ | Deterministic | Stable  
+        - **GAN:** Slower 🐢 | Flexible | High-quality samples
         """)
     
     with col2:
-        train_gan = st.checkbox(
-            "🎨 Train GAN Models for Comparison",
-            value=False,
-            help="Enable GAN training (adds 1-3 minutes)"
+        st.markdown("""
+        ### 🚀 Launch GAN Training
+        
+        Click the button below to open the Google Colab notebook:
+        """)
+        
+        colab_url = "https://colab.research.google.com/drive/1N5tcq66B7IJNKR0uR_KwUnlL8im9qO4-?usp=sharing"
+        
+        st.link_button(
+            "📓 Open GAN Training in Google Colab",
+            colab_url,
+            use_container_width=True,
+            type="primary"
         )
+        
+        st.caption("💡 **Tip:** Changes are saved to your Google Drive. Fork the notebook to keep your own copy!")
     
-    if train_gan:
-        st.warning("⏳ GAN training is in progress. This may take several minutes...")
-        
-        with st.spinner("Training GAN models..."):
-            try:
-                from utils.gan_handler import GANHandler
-                
-                # Train GAN and get results
-                gan_handler = GANHandler(epochs=30, random_state=42)
-                X_train_gan, y_train_gan, _ = gan_handler.apply_gan(
-                    st.session_state.X_train, 
-                    st.session_state.y_train, 
-                    verbose=False
-                )
-                
-                # Train model on GAN data
-                from utils.models import ClassificationModel
-                model_gan = ClassificationModel(
-                    model_type=st.session_state.model_type_key,
-                    random_state=42
-                )
-                model_gan.train(X_train_gan, y_train_gan)
-                
-                # Get predictions
-                y_pred_gan, y_pred_proba_gan = predict_with_model(model_gan, st.session_state.X_test)
-                metrics_gan = ModelEvaluator.evaluate(st.session_state.y_test, y_pred_gan, y_pred_proba_gan)
-                
-                st.session_state.metrics_gan = metrics_gan
-                st.session_state.model_gan = model_gan
-                st.session_state.y_pred_gan = y_pred_gan
-                st.session_state.gan_trained = True
-                
-                st.success("✅ GAN training complete!")
-            except Exception as e:
-                st.error(f"❌ GAN training failed: {str(e)}")
-        
-        if st.session_state.get('gan_trained', False):
-            st.subheader("🎨 GAN Model Performance")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Accuracy", f"{st.session_state.metrics_gan['Accuracy']:.4f}")
-            with col2:
-                st.metric("Precision", f"{st.session_state.metrics_gan['Precision']:.4f}")
-            with col3:
-                st.metric("Recall", f"{st.session_state.metrics_gan['Recall']:.4f}")
-            with col4:
-                st.metric("F1-Score", f"{st.session_state.metrics_gan['F1-Score']:.4f}")
-            
-            # Three-way comparison
-            st.subheader("📊 Three-Way Performance Comparison")
-            
-            comparison_three_way = pd.DataFrame({
-                "Metric": ["Accuracy", "Precision", "Recall", "F1-Score"],
-                "Original": [
-                    f"{st.session_state.metrics_original['Accuracy']:.4f}",
-                    f"{st.session_state.metrics_original['Precision']:.4f}",
-                    f"{st.session_state.metrics_original['Recall']:.4f}",
-                    f"{st.session_state.metrics_original['F1-Score']:.4f}"
-                ],
-                "SMOTE": [
-                    f"{st.session_state.metrics_smote['Accuracy']:.4f}",
-                    f"{st.session_state.metrics_smote['Precision']:.4f}",
-                    f"{st.session_state.metrics_smote['Recall']:.4f}",
-                    f"{st.session_state.metrics_smote['F1-Score']:.4f}"
-                ],
-                "GAN": [
-                    f"{st.session_state.metrics_gan['Accuracy']:.4f}",
-                    f"{st.session_state.metrics_gan['Precision']:.4f}",
-                    f"{st.session_state.metrics_gan['Recall']:.4f}",
-                    f"{st.session_state.metrics_gan['F1-Score']:.4f}"
-                ]
-            })
-            
-            st.dataframe(comparison_three_way, use_container_width=True, hide_index=True)
-            
-            # Visualization
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fig, ax = plt.subplots(figsize=(8, 5))
-                
-                metrics_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
-                original_vals = [
-                    st.session_state.metrics_original['Accuracy'],
-                    st.session_state.metrics_original['Precision'],
-                    st.session_state.metrics_original['Recall'],
-                    st.session_state.metrics_original['F1-Score']
-                ]
-                smote_vals = [
-                    st.session_state.metrics_smote['Accuracy'],
-                    st.session_state.metrics_smote['Precision'],
-                    st.session_state.metrics_smote['Recall'],
-                    st.session_state.metrics_smote['F1-Score']
-                ]
-                gan_vals = [
-                    st.session_state.metrics_gan['Accuracy'],
-                    st.session_state.metrics_gan['Precision'],
-                    st.session_state.metrics_gan['Recall'],
-                    st.session_state.metrics_gan['F1-Score']
-                ]
-                
-                x = np.arange(len(metrics_names))
-                width = 0.25
-                
-                ax.bar(x - width, original_vals, width, label='Original', color='#1f77b4')
-                ax.bar(x, smote_vals, width, label='SMOTE', color='#2ca02c')
-                ax.bar(x + width, gan_vals, width, label='GAN', color='#d62728')
-                
-                ax.set_ylabel('Score')
-                ax.set_title('Three-Way Comparison: Original vs SMOTE vs GAN')
-                ax.set_xticks(x)
-                ax.set_xticklabels(metrics_names, rotation=45, ha='right')
-                ax.legend()
-                ax.grid(axis='y', alpha=0.3)
-                ax.set_ylim([0, 1.1])
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-            
-            with col2:
-                fig, ax = plt.subplots(figsize=(8, 5))
-                
-                smote_improvements = [
-                    (st.session_state.metrics_smote['Accuracy'] - st.session_state.metrics_original['Accuracy']) * 100,
-                    (st.session_state.metrics_smote['Precision'] - st.session_state.metrics_original['Precision']) * 100,
-                    (st.session_state.metrics_smote['Recall'] - st.session_state.metrics_original['Recall']) * 100,
-                    (st.session_state.metrics_smote['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100
-                ]
-                
-                gan_improvements = [
-                    (st.session_state.metrics_gan['Accuracy'] - st.session_state.metrics_original['Accuracy']) * 100,
-                    (st.session_state.metrics_gan['Precision'] - st.session_state.metrics_original['Precision']) * 100,
-                    (st.session_state.metrics_gan['Recall'] - st.session_state.metrics_original['Recall']) * 100,
-                    (st.session_state.metrics_gan['F1-Score'] - st.session_state.metrics_original['F1-Score']) * 100
-                ]
-                
-                x = np.arange(len(metrics_names))
-                width = 0.35
-                
-                ax.bar(x - width/2, smote_improvements, width, label='SMOTE', color='#2ca02c')
-                ax.bar(x + width/2, gan_improvements, width, label='GAN', color='#d62728')
-                
-                ax.set_ylabel('Improvement (%)')
-                ax.set_title('Improvement Over Original Model')
-                ax.set_xticks(x)
-                ax.set_xticklabels(metrics_names, rotation=45, ha='right')
-                ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
-                ax.legend()
-                ax.grid(axis='y', alpha=0.3)
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-            
-            # Recommendation
-            st.header("🎯 SMOTE vs GAN Recommendation")
-            
-            smote_f1 = st.session_state.metrics_smote['F1-Score']
-            gan_f1 = st.session_state.metrics_gan['F1-Score']
-            original_f1 = st.session_state.metrics_original['F1-Score']
-            
-            if smote_f1 > gan_f1:
-                recommendation = "SMOTE"
-                difference = (smote_f1 - gan_f1) * 100
-            else:
-                recommendation = "GAN"
-                difference = (gan_f1 - smote_f1) * 100
-            
-            st.success(f"""
-            ### 📌 Recommendation: **{recommendation}** performs better
-            
-            **F1-Score Comparison:**
-            - Original: {original_f1:.4f}
-            - SMOTE: {smote_f1:.4f}
-            - GAN: {gan_f1:.4f}
-            
-            **Winner's Advantage:** {difference:.2f} percentage points
-            """)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("SMOTE Strengths")
-                st.markdown("""
-                ✅ Fast training (seconds)\n
-                ✅ Deterministic results\n
-                ✅ Easy to interpret\n
-                ✅ Low computational overhead
-                """)
-            
-            with col2:
-                st.subheader("GAN Strengths")
-                st.markdown("""
-                ✅ Complex pattern learning\n
-                ✅ High-quality samples\n
-                ✅ Flexible approach\n
-                ✅ Modern deep learning
-                """)
+    st.markdown("""
+    ---
+    ### 📊 What You'll Learn in the Colab Notebook:
+    
+    1. **GAN Architecture** - Understanding Generator and Discriminator networks
+    2. **Synthetic Data Generation** - Creating balanced datasets with GANs
+    3. **Model Training** - Building and training GANs with Keras/TensorFlow
+    4. **Head-to-Head Comparison** - SMOTE vs GAN performance metrics
+    5. **Visualization** - Distribution analysis and performance charts
+    6. **Best Practices** - When to use each technique
+    
+    The notebook supports all 4 datasets:
+    - Attrition Dataset
+    - Bank Dataset
+    - Credit Card Dataset
+    - Diabetes Dataset
+    """)
     
     # ======== SUMMARY ========
     st.header("✅ Analysis Summary")
@@ -1512,6 +1335,421 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     - Analyze which techniques work best for different imbalance ratios
     """)
 
+# ========== QUIZ PAGE ==========
+elif st.session_state.current_page == 'quiz':
+    st.title("📝 Knowledge Assessment Quiz")
+    
+    st.markdown("""
+    Test your understanding of class imbalance, SMOTE, and data balancing techniques.
+    This quiz has **10 questions** covering the key concepts from this virtual lab.
+    
+    **How it works:**
+    - Select your answer for each question
+    - Click "Submit Quiz" to see your score
+    - Review your performance and areas for improvement
+    """)
+    
+    st.markdown("---")
+    
+    # Quiz questions
+    quiz_questions = {
+        1: {
+            "question": "What is class imbalance in machine learning?",
+            "options": [
+                "A situation where training data classes are distributed unequally",
+                "When a model has more features than samples",
+                "When the training and test sets have different sizes",
+                "When the model's accuracy is below 50%"
+            ],
+            "correct": 0,
+            "category": "Fundamentals"
+        },
+        2: {
+            "question": "What does SMOTE stand for?",
+            "options": [
+                "Statistical Minority Oversampling Technique",
+                "Synthetic Minority Over-sampling Technique",
+                "Sequential Minority Optimization Technique",
+                "Systematic Model Optimization Through Examples"
+            ],
+            "correct": 1,
+            "category": "SMOTE Basics"
+        },
+        3: {
+            "question": "How does SMOTE create synthetic minority class samples?",
+            "options": [
+                "By duplicating existing minority class samples",
+                "By randomly generating samples from a normal distribution",
+                "By interpolating between existing minority class samples and their k-nearest neighbors",
+                "By up-weighting minority class samples during training"
+            ],
+            "correct": 2,
+            "category": "SMOTE Basics"
+        },
+        4: {
+            "question": "What is a major problem with simple random oversampling?",
+            "options": [
+                "It reduces model accuracy",
+                "It causes overfitting due to duplicate samples",
+                "It works only for binary classification",
+                "It requires categorical features"
+            ],
+            "correct": 1,
+            "category": "Fundamentals"
+        },
+        5: {
+            "question": "When should SMOTE be applied during model building?",
+            "options": [
+                "Before train-test split to avoid data leakage",
+                "After train-test split, only on training data",
+                "Only on the test set",
+                "During cross-validation to balance all folds"
+            ],
+            "correct": 1,
+            "category": "Best Practices"
+        },
+        6: {
+            "question": "Which metric is most important for evaluating imbalanced datasets?",
+            "options": [
+                "Accuracy only",
+                "Precision only",
+                "F1-Score (balance of Precision and Recall)",
+                "Sensitivity only"
+            ],
+            "correct": 2,
+            "category": "Evaluation"
+        },
+        7: {
+            "question": "What is the 'k' parameter in SMOTE typically used for?",
+            "options": [
+                "Number of classes in the dataset",
+                "Number of nearest neighbors to consider for synthetic sample creation",
+                "Number of features to select",
+                "Number of iterations for training"
+            ],
+            "correct": 1,
+            "category": "SMOTE Basics"
+        },
+        8: {
+            "question": "How does class imbalance affect Recall?",
+            "options": [
+                "It has no effect on Recall",
+                "It increases Recall",
+                "It decreases Recall for the minority class",
+                "It affects only Precision, not Recall"
+            ],
+            "correct": 2,
+            "category": "Evaluation"
+        },
+        9: {
+            "question": "What is the primary advantage of SMOTE over random oversampling?",
+            "options": [
+                "It is faster to compute",
+                "It reduces memory usage",
+                "It creates diverse synthetic samples instead of duplicates",
+                "It works for both classification and regression"
+            ],
+            "correct": 2,
+            "category": "SMOTE Advantages"
+        },
+        10: {
+            "question": "Which of these is NOT a limitation of SMOTE?",
+            "options": [
+                "It can create overlapping samples near decision boundaries",
+                "It cannot handle multi-class imbalance",
+                "It may generate noisy samples if minority class is too small",
+                "It can potentially suppress minority class samples"
+            ],
+            "correct": 1,
+            "category": "SMOTE Limitations"
+        }
+    }
+    
+    # Initialize session state for quiz
+    if 'quiz_answers' not in st.session_state:
+        st.session_state.quiz_answers = {}
+    if 'quiz_submitted' not in st.session_state:
+        st.session_state.quiz_submitted = False
+    
+    # Display quiz questions
+    for q_num, q_data in quiz_questions.items():
+        st.markdown(f"### Question {q_num}: {q_data['category']}")
+        st.write(q_data['question'])
+        
+        selected_answer = st.radio(
+            f"Select your answer for Question {q_num}:",
+            options=q_data['options'],
+            index=st.session_state.quiz_answers.get(q_num, 0),
+            key=f"q_{q_num}",
+            label_visibility="collapsed"
+        )
+        
+        st.session_state.quiz_answers[q_num] = q_data['options'].index(selected_answer)
+        st.markdown("---")
+    
+    # Submit button
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("✅ Submit Quiz", use_container_width=True, type="primary"):
+            st.session_state.quiz_submitted = True
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Display results if submitted
+    if st.session_state.quiz_submitted:
+        st.markdown("### 📊 Quiz Results")
+        
+        # Calculate score
+        correct_count = 0
+        category_scores = {}
+        
+        for q_num, q_data in quiz_questions.items():
+            if st.session_state.quiz_answers[q_num] == q_data['correct']:
+                correct_count += 1
+            
+            category = q_data['category']
+            if category not in category_scores:
+                category_scores[category] = {'correct': 0, 'total': 0}
+            category_scores[category]['total'] += 1
+            if st.session_state.quiz_answers[q_num] == q_data['correct']:
+                category_scores[category]['correct'] += 1
+        
+        # Calculate percentage and grade
+        percentage = (correct_count / len(quiz_questions)) * 100
+        
+        if percentage >= 90:
+            grade = "A"
+            grade_color = "🟢"
+            grade_msg = "Excellent! Outstanding understanding!"
+        elif percentage >= 80:
+            grade = "B"
+            grade_color = "🟢"
+            grade_msg = "Great! You have a strong grasp of the concepts!"
+        elif percentage >= 70:
+            grade = "C"
+            grade_color = "🟡"
+            grade_msg = "Good! You understand the basics well."
+        elif percentage >= 60:
+            grade = "D"
+            grade_color = "🟠"
+            grade_msg = "Fair. Review the material and try again."
+        else:
+            grade = "F"
+            grade_color = "🔴"
+            grade_msg = "Needs improvement. Review the concepts carefully."
+        
+        # Display overall score
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Score", f"{correct_count}/{len(quiz_questions)}")
+        with col2:
+            st.metric("Percentage", f"{percentage:.1f}%")
+        with col3:
+            st.metric("Grade", f"{grade_color} {grade}")
+        
+        st.markdown(f"### {grade_msg}")
+        
+        st.markdown("---")
+        
+        # Category breakdown
+        st.markdown("### 📋 Performance by Category")
+        
+        category_data = []
+        for category, scores in category_scores.items():
+            cat_percentage = (scores['correct'] / scores['total']) * 100
+            category_data.append({
+                'Category': category,
+                'Correct': f"{scores['correct']}/{scores['total']}",
+                'Percentage': f"{cat_percentage:.0f}%"
+            })
+        
+        category_df = pd.DataFrame(category_data)
+        st.dataframe(category_df, use_container_width=True, hide_index=True)
+        
+        # Areas for improvement
+        st.markdown("### 🎯 Areas for Improvement")
+        
+        improvement_areas = []
+        for q_num, q_data in quiz_questions.items():
+            if st.session_state.quiz_answers[q_num] != q_data['correct']:
+                improvement_areas.append({
+                    'Question': f"Question {q_num}",
+                    'Category': q_data['category'],
+                    'Your Answer': q_data['options'][st.session_state.quiz_answers[q_num]],
+                    'Correct Answer': q_data['options'][q_data['correct']]
+                })
+        
+        if improvement_areas:
+            improvement_df = pd.DataFrame(improvement_areas)
+            st.warning(f"You answered {len(improvement_areas)} question(s) incorrectly. Below are the areas to review:")
+            st.dataframe(improvement_df, use_container_width=True, hide_index=True)
+            
+            st.markdown("""
+            **Recommendations:**
+            - Review the incorrect question categories
+            - Go back to the Introduction and Objectives pages
+            - Re-run simulations to reinforce your understanding
+            - Focus on the SMOTE mechanism and evaluation metrics
+            """)
+        else:
+            st.success("🎉 Perfect Score! You have mastered all the concepts!")
+        
+        # Retake button
+        if st.button("🔄 Retake Quiz", use_container_width=True):
+            st.session_state.quiz_submitted = False
+            st.session_state.quiz_answers = {}
+            st.rerun()
+
+# ========== REFERENCES PAGE ==========
+elif st.session_state.current_page == 'references':
+    st.title("📚 References & Resources")
+    
+    st.markdown("""
+    This section provides academic references and resources used in the SMOTE Virtual Lab,
+    formatted in IEEE citation style.
+    """)
+    
+    st.markdown("---")
+    
+    st.markdown("### Primary References on SMOTE")
+    
+    references = """
+    [1] N. V. Chawla, K. W. Bowyer, L. O. Hall, and W. P. Kegelmeyer, "SMOTE: Synthetic 
+        Minority Over-sampling Technique," Journal of Artificial Intelligence Research, 
+        vol. 16, pp. 321–357, 2002.
+    
+    [2] A. Fernández, S. García, F. Herrera, and N. V. Chawla, "SMOTE for learning from 
+        imbalanced data: Progress and challenges, marking the 15-year anniversary," Journal 
+        of Artificial Intelligence Research, vol. 61, pp. 863–905, 2018.
+    
+    [3] H. He, Y. Bai, E. A. Garcia, and S. Li, "ADASYN: Adaptive synthetic sampling approach 
+        for imbalanced learning," in Proceedings of the IEEE International Joint Conference 
+        on Neural Networks (IJCNN), pp. 1322–1328, 2008.
+    
+    [4] G. E. A. P. A. Batista, R. C. Prati, and M. C. Monard, "A study of the behavior of 
+        several methods for balancing machine learning training data," ACM SIGKDD Explorations 
+        Newsletter, vol. 6, no. 1, pp. 20–29, 2004.
+    """
+    
+    st.markdown(references)
+    
+    st.markdown("---")
+    st.markdown("### Class Imbalance & Evaluation Metrics")
+    
+    references_eval = """
+    [5] B. Krawczyk, "Learning from imbalanced data: open challenges and future directions," 
+        Progress in Artificial Intelligence, vol. 5, no. 4, pp. 221–232, 2016.
+    
+    [6] M. Kuhn and K. Johnson, Applied Predictive Modeling. New York: Springer, 2013, ch. 17.
+    
+    [7] J. Davis and M. Goadrich, "The relationship between precision-recall and ROC curves," 
+        in Proceedings of the 23rd International Conference on Machine Learning (ICML), 
+        pp. 233–240, 2006.
+    
+    [8] T. Fawcett, "An introduction to ROC analysis," Pattern Recognition Letters, vol. 27, 
+        no. 8, pp. 861–874, 2006.
+    """
+    
+    st.markdown(references_eval)
+    
+    st.markdown("---")
+    st.markdown("### Machine Learning Fundamentals")
+    
+    references_ml = """
+    [9] T. Hastie, R. Tibshirani, and J. Friedman, The Elements of Statistical Learning: 
+        Data Mining, Inference, and Prediction, 2nd ed. New York: Springer, 2009.
+    
+    [10] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning. Cambridge, MA: MIT Press, 2016.
+    
+    [11] C. M. Bishop, Pattern Recognition and Machine Learning. New York: Springer, 2006.
+    
+    [12] A. Géron, Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow, 2nd ed. 
+         Sebastopol, CA: O'Reilly Media, 2019.
+    """
+    
+    st.markdown(references_ml)
+    
+    st.markdown("---")
+    st.markdown("### GAN and Advanced Techniques")
+    
+    references_gan = """
+    [13] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. Warde-Farley, S. Ozair, 
+         A. Courville, and Y. Bengio, "Generative adversarial nets," in Advances in Neural 
+         Information Processing Systems (NIPS), pp. 2672–2680, 2014.
+    
+    [14] J. Xu and Z. Zhang, "Generative adversarial networks for imbalanced learning," 
+         in Proceedings of the 2018 IEEE International Conference on Data Mining (ICDM), 
+         pp. 1227–1234, 2018.
+    
+    [15] R. Zhao, A. Mao, X. Wang, and X. Zou, "Generating imbalanced examples for data 
+         augmentation using GANs," arXiv preprint arXiv:2010.08704, 2020.
+    """
+    
+    st.markdown(references_gan)
+    
+    st.markdown("---")
+    st.markdown("### Tools & Libraries")
+    
+    references_tools = """
+    [16] F. Pedregosa, G. Varoquaux, A. Gramfort, et al., "Scikit-learn: Machine learning 
+         in Python," Journal of Machine Learning Research, vol. 12, pp. 2825–2830, 2011.
+    
+    [17] G. Lemaitre, F. Nogueira, and C. E. Aridas, "Imbalanced-learn: A Python toolbox 
+         to tackle the curse of imbalanced datasets in machine learning," Journal of Machine 
+         Learning Research, vol. 21, no. 17, pp. 1–6, 2020.
+    
+    [18] M. Abadi et al., "TensorFlow: A system for large-scale machine learning," in USENIX 
+         Symposium on Operating Systems Design and Implementation (OSDI), pp. 265–283, 2016.
+    
+    [19] F. Chollet et al., "Keras," https://keras.io, 2015.
+    """
+    
+    st.markdown(references_tools)
+    
+    st.markdown("---")
+    st.markdown("### Recommended Textbooks")
+    
+    textbooks = """
+    - **Machine Learning**: A Probabilistic Perspective by Kevin P. Murphy
+    - **Deep Learning** by Ian Goodfellow, Yoshua Bengio, and Aaron Courville
+    - **The Elements of Statistical Learning** by Hastie, Tibshirani, and Friedman
+    - **Hands-On Machine Learning** by Aurélien Géron
+    - **Applied Predictive Modeling** by Kuhn and Johnson
+    """
+    
+    st.markdown(textbooks)
+    
+    st.markdown("---")
+    st.markdown("### Online Resources")
+    
+    resources = """
+    - **Scikit-Learn Documentation**: https://scikit-learn.org
+    - **Imbalanced-Learn Documentation**: https://imbalanced-learn.org
+    - **TensorFlow/Keras Documentation**: https://tensorflow.org
+    - **Papers with Code**: https://paperswithcode.com (search for "SMOTE" or "class imbalance")
+    - **arXiv**: https://arxiv.org (for recent research papers)
+    """
+    
+    st.markdown(resources)
+    
+    st.markdown("---")
+    st.markdown("### Citation Format")
+    
+    st.info("""
+    **IEEE Format Explanation:**
+    
+    The IEEE citation style uses numbered citations in square brackets [1], [2], etc.
+    
+    **General Format:**
+    [#] Initial(s). Surname, Initial(s). Surname, "Article title," Journal Title, vol. #, 
+        pp. page range, Year.
+    
+    **Example:**
+    [1] N. V. Chawla et al., "SMOTE: Synthetic Minority Over-sampling Technique," 
+        Journal of Artificial Intelligence Research, vol. 16, pp. 321–357, 2002.
+    """)
+
 else:
     st.info("👈 Configure your analysis settings above and click the 'Run Analysis' button to start!")
 
@@ -1520,6 +1758,6 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center'>
     <p><strong>SMOTE Virtual Lab</strong> | Demonstrating Class Imbalance Handling Techniques</p>
-    <p style='font-size: 0.9em; color: gray;'>Made with Streamlit | SMOTE vs GAN Comparison</p>
+   
 </div>
 """, unsafe_allow_html=True)

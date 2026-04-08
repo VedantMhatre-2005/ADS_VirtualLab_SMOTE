@@ -4,22 +4,75 @@ from sklearn.preprocessing import MinMaxScaler
 from collections import Counter
 import warnings
 import os
+import logging
+import sys
 
 # Suppress TensorFlow and related warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
-try:
-    import tensorflow as tf
-    # Suppress TensorFlow verbose output
-    tf.get_logger().setLevel('ERROR')
-    from tensorflow import keras
-    from tensorflow.keras import layers, Model
-    from tensorflow.keras.optimizers import Adam
-    TF_AVAILABLE = True
-except Exception as e:
-    TF_AVAILABLE = False
-    TF_ERROR = str(e)
+# Global variables - will be populated on first use
+_keras_imported = False
+tf = None
+Sequential = None
+Dense = None
+BatchNormalization = None
+Dropout = None
+Input = None
+Model = None
+Adam = None
+TF_AVAILABLE = False
+TF_ERROR = None
+
+
+def _initialize_keras():
+    """Lazy initialization of Keras components."""
+    global _keras_imported, tf, Sequential, Dense, BatchNormalization, Dropout, Input, Model, Adam, TF_AVAILABLE, TF_ERROR
+    
+    if _keras_imported:
+        return
+    
+    _keras_imported = True
+    
+    try:
+        import tensorflow as tf_module
+        tf = tf_module
+        
+        # Suppress TensorFlow verbose output
+        try:
+            tf.get_logger().setLevel('ERROR')
+        except (AttributeError, RuntimeError):
+            pass
+        
+        # Try direct keras import first
+        try:
+            import keras as keras_module
+            Sequential = keras_module.Sequential
+            Dense = keras_module.layers.Dense
+            BatchNormalization = keras_module.layers.BatchNormalization
+            Dropout = keras_module.layers.Dropout
+            Input = keras_module.layers.Input
+            Model = keras_module.models.Model
+            Adam = keras_module.optimizers.Adam
+        except (ImportError, AttributeError):
+            # Fallback to tf.keras
+            Sequential = tf.keras.Sequential
+            Dense = tf.keras.layers.Dense
+            BatchNormalization = tf.keras.layers.BatchNormalization
+            Dropout = tf.keras.layers.Dropout
+            Input = tf.keras.layers.Input
+            Model = tf.keras.models.Model
+            Adam = tf.keras.optimizers.Adam
+        
+        TF_AVAILABLE = True
+    except Exception as e:
+        TF_AVAILABLE = False
+        TF_ERROR = str(e)
+
+
+# Initialize on import
+_initialize_keras()
 
 
 class SimpleGAN:
@@ -56,27 +109,39 @@ class SimpleGAN:
         self.scaler = MinMaxScaler()
         
         np.random.seed(random_state)
-        tf.random.set_seed(random_state)
+        tf_module = globals()['tf']
+        if tf_module:
+            tf_module.random.set_seed(random_state)
     
     def _build_generator(self, input_dim):
         """Build generator network."""
-        model = keras.Sequential([
-            layers.Dense(64, activation='relu', input_dim=self.latent_dim),
-            layers.BatchNormalization(),
-            layers.Dense(128, activation='relu'),
-            layers.BatchNormalization(),
-            layers.Dense(input_dim, activation='sigmoid')
+        # Access globals to ensure they're initialized
+        seq_class = globals()['Sequential']
+        dense_class = globals()['Dense']
+        bn_class = globals()['BatchNormalization']
+        
+        model = seq_class([
+            dense_class(64, activation='relu', input_dim=self.latent_dim),
+            bn_class(),
+            dense_class(128, activation='relu'),
+            bn_class(),
+            dense_class(input_dim, activation='sigmoid')
         ])
         return model
     
     def _build_discriminator(self, input_dim):
         """Build discriminator network."""
-        model = keras.Sequential([
-            layers.Dense(128, activation='relu', input_dim=input_dim),
-            layers.Dropout(0.3),
-            layers.Dense(64, activation='relu'),
-            layers.Dropout(0.3),
-            layers.Dense(1, activation='sigmoid')
+        # Access globals to ensure they're initialized
+        seq_class = globals()['Sequential']
+        dense_class = globals()['Dense']
+        dropout_class = globals()['Dropout']
+        
+        model = seq_class([
+            dense_class(128, activation='relu', input_dim=input_dim),
+            dropout_class(0.3),
+            dense_class(64, activation='relu'),
+            dropout_class(0.3),
+            dense_class(1, activation='sigmoid')
         ])
         return model
     
@@ -127,12 +192,16 @@ class SimpleGAN:
         )
         
         # Build GAN
-        noise_input = layers.Input(shape=(self.latent_dim,))
+        input_class = globals()['Input']
+        model_class = globals()['Model']
+        adam_class = globals()['Adam']
+        
+        noise_input = input_class(shape=(self.latent_dim,))
         generated_data = self.generator(noise_input)
         validity = self.discriminator(generated_data)
-        self.gan = Model(noise_input, validity)
+        self.gan = model_class(noise_input, validity)
         self.gan.compile(
-            optimizer=Adam(learning_rate=0.0002),
+            optimizer=adam_class(learning_rate=0.0002),
             loss='binary_crossentropy'
         )
         
