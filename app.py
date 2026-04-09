@@ -23,14 +23,22 @@ st.set_page_config(
 # Apply Google Sans globally
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
     
     * {
-        font-family: 'Roboto', sans-serif !important;
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
     
     html, body, [class*="css"] {
-        font-family: 'Roboto', sans-serif !important;
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    
+    button, input, textarea, select {
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -101,12 +109,14 @@ st.markdown("""
 # Initialize session state for page navigation
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'introduction'
+if 'pending_page' not in st.session_state:
+    st.session_state.pending_page = None
 
 # Sidebar Navigation
 st.sidebar.markdown("# 📚 SMOTE Virtual Lab")
 st.sidebar.markdown("---")
 
-# Stable page selector to avoid missed transitions during reruns
+# Page options
 page_options = {
     "📖 Introduction": "introduction",
     "🎯 Objective": "objectives",
@@ -115,6 +125,7 @@ page_options = {
     "📚 References": "references"
 }
 
+# Find current label
 current_label = next(
     (label for label, page in page_options.items() if page == st.session_state.current_page),
     "📖 Introduction"
@@ -127,7 +138,18 @@ selected_label = st.sidebar.radio(
     key="sidebar_page_selector"
 )
 
-st.session_state.current_page = page_options[selected_label]
+# Update page if selection changed
+new_page = page_options[selected_label]
+if new_page != st.session_state.current_page:
+    st.session_state.current_page = new_page
+    # Clear any page-specific session state when changing pages
+    for key in list(st.session_state.keys()):
+        if key.startswith('quiz_') or key.startswith('run_'):
+            pass  # Keep these
+        elif key not in ['current_page', 'pending_page', 'sidebar_page_selector', 'selected_dataset', 'selected_model_type']:
+            if key not in st.session_state:
+                continue
+    st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -252,7 +274,7 @@ elif st.session_state.current_page == 'simulation':
     .config-section {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 2rem;
+        padding: 1rem 2rem;
         border-radius: 10px;
         margin-bottom: 2rem;
     }
@@ -808,14 +830,6 @@ if "analysis_ready" in st.session_state and st.session_state.analysis_ready:
     are therefore critical.
     </div>
     """, unsafe_allow_html=True)
-    
-    # Data statistics
-    st.markdown("#### Feature Statistics (Sample of First 5 Features)")
-    if "feature_stats_df" in st.session_state:
-        st.dataframe(st.session_state.feature_stats_df, use_container_width=True)
-    else:
-        feature_stats = st.session_state.X.iloc[:, :5].describe().T
-        st.dataframe(feature_stats, use_container_width=True)
     
     # ======== SECTION 2: MODEL PERFORMANCE (ORIGINAL DATA) ========
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
