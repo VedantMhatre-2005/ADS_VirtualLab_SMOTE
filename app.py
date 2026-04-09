@@ -106,26 +106,28 @@ if 'current_page' not in st.session_state:
 st.sidebar.markdown("# 📚 SMOTE Virtual Lab")
 st.sidebar.markdown("---")
 
-# Navigation buttons in sidebar - stacked vertically
-if st.sidebar.button("📖 Introduction", use_container_width=True, key="intro_btn"):
-    st.session_state.current_page = 'introduction'
-    st.rerun()
+# Stable page selector to avoid missed transitions during reruns
+page_options = {
+    "📖 Introduction": "introduction",
+    "🎯 Objective": "objectives",
+    "🔬 Simulation": "simulation",
+    "📝 Quiz": "quiz",
+    "📚 References": "references"
+}
 
-if st.sidebar.button("🎯 Objective", use_container_width=True, key="goals_btn"):
-    st.session_state.current_page = 'objectives'
-    st.rerun()
+current_label = next(
+    (label for label, page in page_options.items() if page == st.session_state.current_page),
+    "📖 Introduction"
+)
 
-if st.sidebar.button("🔬 Simulation", use_container_width=True, key="sim_btn"):
-    st.session_state.current_page = 'simulation'
-    st.rerun()
+selected_label = st.sidebar.radio(
+    "Navigate",
+    options=list(page_options.keys()),
+    index=list(page_options.keys()).index(current_label),
+    key="sidebar_page_selector"
+)
 
-if st.sidebar.button("📝 Quiz", use_container_width=True, key="quiz_btn"):
-    st.session_state.current_page = 'quiz'
-    st.rerun()
-
-if st.sidebar.button("📚 References", use_container_width=True, key="ref_btn"):
-    st.session_state.current_page = 'references'
-    st.rerun()
+st.session_state.current_page = page_options[selected_label]
 
 st.sidebar.markdown("---")
 
@@ -1341,182 +1343,425 @@ elif st.session_state.current_page == 'quiz':
     
     st.markdown("""
     Test your understanding of class imbalance, SMOTE, and data balancing techniques.
-    This quiz has **10 questions** covering the key concepts from this virtual lab.
+    Choose a section and attempt **10 questions** based on that difficulty level.
     
     **How it works:**
+    - Select one section: Beginner, Intermediate, or Advanced
     - Select your answer for each question
-    - Click "Submit Quiz" to see your score
+    - Click "Submit Quiz" to see your section score out of 10
     - Review your performance and areas for improvement
     """)
     
     st.markdown("---")
     
-    # Quiz questions
-    quiz_questions = {
-        1: {
-            "question": "What is class imbalance in machine learning?",
-            "options": [
-                "A situation where training data classes are distributed unequally",
-                "When a model has more features than samples",
-                "When the training and test sets have different sizes",
-                "When the model's accuracy is below 50%"
-            ],
-            "correct": 0,
-            "category": "Fundamentals"
+    quiz_sections = {
+        "Beginner": {
+            1: {
+                "question": "What is class imbalance in machine learning?",
+                "options": [
+                    "A situation where training data classes are distributed unequally",
+                    "When a model has more features than samples",
+                    "When the training and test sets have different sizes",
+                    "When the model's accuracy is below 50%"
+                ],
+                "correct": 0,
+                "category": "Fundamentals"
+            },
+            2: {
+                "question": "What does SMOTE stand for?",
+                "options": [
+                    "Statistical Minority Oversampling Technique",
+                    "Synthetic Minority Over-sampling Technique",
+                    "Sequential Minority Optimization Technique",
+                    "Systematic Model Optimization Through Examples"
+                ],
+                "correct": 1,
+                "category": "SMOTE Basics"
+            },
+            3: {
+                "question": "How does SMOTE create synthetic minority class samples?",
+                "options": [
+                    "By duplicating existing minority class samples",
+                    "By randomly generating samples from a normal distribution",
+                    "By interpolating between existing minority class samples and their k-nearest neighbors",
+                    "By up-weighting minority class samples during training"
+                ],
+                "correct": 2,
+                "category": "SMOTE Basics"
+            },
+            4: {
+                "question": "What is a major problem with simple random oversampling?",
+                "options": [
+                    "It reduces model accuracy",
+                    "It causes overfitting due to duplicate samples",
+                    "It works only for binary classification",
+                    "It requires categorical features"
+                ],
+                "correct": 1,
+                "category": "Fundamentals"
+            },
+            5: {
+                "question": "When should SMOTE be applied during model building?",
+                "options": [
+                    "Before train-test split to avoid data leakage",
+                    "After train-test split, only on training data",
+                    "Only on the test set",
+                    "During cross-validation to balance all folds"
+                ],
+                "correct": 1,
+                "category": "Best Practices"
+            },
+            6: {
+                "question": "Which metric is most important for evaluating imbalanced datasets?",
+                "options": [
+                    "Accuracy only",
+                    "Precision only",
+                    "F1-Score (balance of Precision and Recall)",
+                    "Sensitivity only"
+                ],
+                "correct": 2,
+                "category": "Evaluation"
+            },
+            7: {
+                "question": "What is the 'k' parameter in SMOTE typically used for?",
+                "options": [
+                    "Number of classes in the dataset",
+                    "Number of nearest neighbors to consider for synthetic sample creation",
+                    "Number of features to select",
+                    "Number of iterations for training"
+                ],
+                "correct": 1,
+                "category": "SMOTE Basics"
+            },
+            8: {
+                "question": "How does class imbalance affect Recall?",
+                "options": [
+                    "It has no effect on Recall",
+                    "It increases Recall",
+                    "It decreases Recall for the minority class",
+                    "It affects only Precision, not Recall"
+                ],
+                "correct": 2,
+                "category": "Evaluation"
+            },
+            9: {
+                "question": "What is the primary advantage of SMOTE over random oversampling?",
+                "options": [
+                    "It is faster to compute",
+                    "It reduces memory usage",
+                    "It creates diverse synthetic samples instead of duplicates",
+                    "It works for both classification and regression"
+                ],
+                "correct": 2,
+                "category": "SMOTE Advantages"
+            },
+            10: {
+                "question": "Which of these is NOT a limitation of SMOTE?",
+                "options": [
+                    "It can create overlapping samples near decision boundaries",
+                    "It cannot handle multi-class imbalance",
+                    "It may generate noisy samples if minority class is too small",
+                    "It can potentially suppress minority class samples"
+                ],
+                "correct": 1,
+                "category": "SMOTE Limitations"
+            }
         },
-        2: {
-            "question": "What does SMOTE stand for?",
-            "options": [
-                "Statistical Minority Oversampling Technique",
-                "Synthetic Minority Over-sampling Technique",
-                "Sequential Minority Optimization Technique",
-                "Systematic Model Optimization Through Examples"
-            ],
-            "correct": 1,
-            "category": "SMOTE Basics"
+        "Intermediate": {
+            1: {
+                "question": "Why can high accuracy be misleading on imbalanced datasets?",
+                "options": [
+                    "Because accuracy ignores true negatives",
+                    "Because a model can predict only the majority class and still appear accurate",
+                    "Because accuracy is valid only for regression",
+                    "Because accuracy is always lower than recall"
+                ],
+                "correct": 1,
+                "category": "Evaluation"
+            },
+            2: {
+                "question": "What is the key risk of applying SMOTE before train-test split?",
+                "options": [
+                    "Model underfitting",
+                    "Data leakage",
+                    "Class inversion",
+                    "Feature scaling mismatch"
+                ],
+                "correct": 1,
+                "category": "Best Practices"
+            },
+            3: {
+                "question": "In binary classification, precision mainly answers:",
+                "options": [
+                    "How many actual positives were detected?",
+                    "How many predicted positives are truly positive?",
+                    "How balanced are class counts?",
+                    "How many total samples were correct?"
+                ],
+                "correct": 1,
+                "category": "Evaluation"
+            },
+            4: {
+                "question": "If minority recall increases but precision drops sharply, what happens to F1-score typically?",
+                "options": [
+                    "It always increases",
+                    "It always decreases",
+                    "It may increase or decrease depending on the trade-off",
+                    "It remains unchanged"
+                ],
+                "correct": 2,
+                "category": "Evaluation"
+            },
+            5: {
+                "question": "Which preprocessing strategy is safest before applying SMOTE in a pipeline?",
+                "options": [
+                    "Fit scaler on full dataset, then split",
+                    "Split data first, then fit preprocessing on train data and apply SMOTE on train",
+                    "Apply SMOTE to both train and test data",
+                    "Skip preprocessing entirely"
+                ],
+                "correct": 1,
+                "category": "Pipeline"
+            },
+            6: {
+                "question": "What does increasing k_neighbors in SMOTE generally do?",
+                "options": [
+                    "Uses fewer minority samples",
+                    "Uses a broader local neighborhood for interpolation",
+                    "Eliminates synthetic noise completely",
+                    "Balances only the majority class"
+                ],
+                "correct": 1,
+                "category": "SMOTE Parameters"
+            },
+            7: {
+                "question": "Which split strategy is commonly preferred for imbalanced classification?",
+                "options": [
+                    "Random split without stratification",
+                    "Stratified split to preserve class ratio",
+                    "Time-based split only",
+                    "Split by feature importance"
+                ],
+                "correct": 1,
+                "category": "Data Splitting"
+            },
+            8: {
+                "question": "What is a common drawback when SMOTE synthesizes points in overlapping class regions?",
+                "options": [
+                    "It guarantees better ROC-AUC",
+                    "It can increase class ambiguity and false positives",
+                    "It removes minority class signal",
+                    "It automatically tunes model hyperparameters"
+                ],
+                "correct": 1,
+                "category": "SMOTE Limitations"
+            },
+            9: {
+                "question": "Which metric is threshold-independent and useful for ranking quality?",
+                "options": [
+                    "ROC-AUC",
+                    "Accuracy",
+                    "Confusion matrix count",
+                    "Support"
+                ],
+                "correct": 0,
+                "category": "Evaluation"
+            },
+            10: {
+                "question": "When minority class is extremely small, which step is often important before SMOTE?",
+                "options": [
+                    "Remove all minority outliers blindly",
+                    "Inspect data quality and feature space for noise/outliers",
+                    "Duplicate majority class samples",
+                    "Reduce train size"
+                ],
+                "correct": 1,
+                "category": "Best Practices"
+            }
         },
-        3: {
-            "question": "How does SMOTE create synthetic minority class samples?",
-            "options": [
-                "By duplicating existing minority class samples",
-                "By randomly generating samples from a normal distribution",
-                "By interpolating between existing minority class samples and their k-nearest neighbors",
-                "By up-weighting minority class samples during training"
-            ],
-            "correct": 2,
-            "category": "SMOTE Basics"
-        },
-        4: {
-            "question": "What is a major problem with simple random oversampling?",
-            "options": [
-                "It reduces model accuracy",
-                "It causes overfitting due to duplicate samples",
-                "It works only for binary classification",
-                "It requires categorical features"
-            ],
-            "correct": 1,
-            "category": "Fundamentals"
-        },
-        5: {
-            "question": "When should SMOTE be applied during model building?",
-            "options": [
-                "Before train-test split to avoid data leakage",
-                "After train-test split, only on training data",
-                "Only on the test set",
-                "During cross-validation to balance all folds"
-            ],
-            "correct": 1,
-            "category": "Best Practices"
-        },
-        6: {
-            "question": "Which metric is most important for evaluating imbalanced datasets?",
-            "options": [
-                "Accuracy only",
-                "Precision only",
-                "F1-Score (balance of Precision and Recall)",
-                "Sensitivity only"
-            ],
-            "correct": 2,
-            "category": "Evaluation"
-        },
-        7: {
-            "question": "What is the 'k' parameter in SMOTE typically used for?",
-            "options": [
-                "Number of classes in the dataset",
-                "Number of nearest neighbors to consider for synthetic sample creation",
-                "Number of features to select",
-                "Number of iterations for training"
-            ],
-            "correct": 1,
-            "category": "SMOTE Basics"
-        },
-        8: {
-            "question": "How does class imbalance affect Recall?",
-            "options": [
-                "It has no effect on Recall",
-                "It increases Recall",
-                "It decreases Recall for the minority class",
-                "It affects only Precision, not Recall"
-            ],
-            "correct": 2,
-            "category": "Evaluation"
-        },
-        9: {
-            "question": "What is the primary advantage of SMOTE over random oversampling?",
-            "options": [
-                "It is faster to compute",
-                "It reduces memory usage",
-                "It creates diverse synthetic samples instead of duplicates",
-                "It works for both classification and regression"
-            ],
-            "correct": 2,
-            "category": "SMOTE Advantages"
-        },
-        10: {
-            "question": "Which of these is NOT a limitation of SMOTE?",
-            "options": [
-                "It can create overlapping samples near decision boundaries",
-                "It cannot handle multi-class imbalance",
-                "It may generate noisy samples if minority class is too small",
-                "It can potentially suppress minority class samples"
-            ],
-            "correct": 1,
-            "category": "SMOTE Limitations"
+        "Advanced": {
+            1: {
+                "question": "Why is cross-validation with resampling ideally done inside each training fold?",
+                "options": [
+                    "To reduce training time",
+                    "To prevent leakage and get unbiased validation estimates",
+                    "To avoid using stratification",
+                    "To maximize test set size"
+                ],
+                "correct": 1,
+                "category": "Validation"
+            },
+            2: {
+                "question": "For mixed numerical and categorical features, which SMOTE variant is commonly used?",
+                "options": [
+                    "BorderlineSMOTE",
+                    "KMeansSMOTE",
+                    "SMOTENC",
+                    "SVMSMOTE"
+                ],
+                "correct": 2,
+                "category": "SMOTE Variants"
+            },
+            3: {
+                "question": "BorderlineSMOTE focuses synthesis mainly on minority samples that are:",
+                "options": [
+                    "Far from decision boundaries",
+                    "Near class boundaries and harder to classify",
+                    "Randomly selected across all regions",
+                    "Identical duplicates"
+                ],
+                "correct": 1,
+                "category": "SMOTE Variants"
+            },
+            4: {
+                "question": "What is one practical advantage of using class weights instead of oversampling?",
+                "options": [
+                    "Always highest recall",
+                    "No change in data distribution and lower memory overhead",
+                    "Eliminates need for validation",
+                    "Guarantees less overfitting"
+                ],
+                "correct": 1,
+                "category": "Modeling Strategy"
+            },
+            5: {
+                "question": "Which metric is especially informative when positives are rare and you care about positive retrieval quality?",
+                "options": [
+                    "PR-AUC",
+                    "MAE",
+                    "R2",
+                    "Adjusted R2"
+                ],
+                "correct": 0,
+                "category": "Evaluation"
+            },
+            6: {
+                "question": "What can happen if synthetic points are generated in sparse minority regions with noisy neighbors?",
+                "options": [
+                    "Decision boundary may become noisier",
+                    "Model always generalizes better",
+                    "Minority recall becomes exactly 1.0",
+                    "Feature leakage is eliminated"
+                ],
+                "correct": 0,
+                "category": "SMOTE Limitations"
+            },
+            7: {
+                "question": "Which workflow is most robust for tuning model and SMOTE parameters?",
+                "options": [
+                    "Tune on test set for fastest feedback",
+                    "Nested/stratified CV pipeline where resampling occurs only in training folds",
+                    "Apply SMOTE once on full data and reuse",
+                    "Tune only k_neighbors and skip model tuning"
+                ],
+                "correct": 1,
+                "category": "Validation"
+            },
+            8: {
+                "question": "When business cost of false negatives is very high, which decision strategy is common after training?",
+                "options": [
+                    "Increase classification threshold",
+                    "Lower threshold to improve recall",
+                    "Ignore probability outputs",
+                    "Optimize only accuracy"
+                ],
+                "correct": 1,
+                "category": "Thresholding"
+            },
+            9: {
+                "question": "In multiclass imbalance, a common approach is to apply oversampling:",
+                "options": [
+                    "Only to the majority class",
+                    "To each minority class relative to a target sampling strategy",
+                    "Only after test evaluation",
+                    "Without considering class distribution"
+                ],
+                "correct": 1,
+                "category": "Multiclass"
+            },
+            10: {
+                "question": "If ROC-AUC improves but PR-AUC worsens after resampling in a rare-event task, what is the safest interpretation?",
+                "options": [
+                    "Model is definitely better for positive class detection",
+                    "Metrics disagree; inspect precision-recall behavior and operating threshold before concluding",
+                    "Resampling should always be removed",
+                    "ROC-AUC is invalid for classification"
+                ],
+                "correct": 1,
+                "category": "Evaluation"
+            }
         }
     }
-    
-    # Initialize session state for quiz
-    if 'quiz_answers' not in st.session_state:
-        st.session_state.quiz_answers = {}
-    if 'quiz_submitted' not in st.session_state:
-        st.session_state.quiz_submitted = False
-    
-    # Display quiz questions
-    for q_num, q_data in quiz_questions.items():
+
+    selected_section = st.selectbox(
+        "Choose your quiz section:",
+        options=list(quiz_sections.keys()),
+        key="selected_quiz_section"
+    )
+    st.info(f"You are attempting the **{selected_section}** section (10 questions).")
+
+    section_questions = quiz_sections[selected_section]
+    section_key = selected_section.lower().replace(" ", "_")
+
+    # Initialize session state for section-wise quiz attempts
+    if 'quiz_answers_by_section' not in st.session_state:
+        st.session_state.quiz_answers_by_section = {}
+    if 'quiz_submitted_by_section' not in st.session_state:
+        st.session_state.quiz_submitted_by_section = {}
+
+    if selected_section not in st.session_state.quiz_answers_by_section:
+        st.session_state.quiz_answers_by_section[selected_section] = {}
+    if selected_section not in st.session_state.quiz_submitted_by_section:
+        st.session_state.quiz_submitted_by_section[selected_section] = False
+
+    section_answers = st.session_state.quiz_answers_by_section[selected_section]
+
+    # Display questions for selected section
+    for q_num, q_data in section_questions.items():
         st.markdown(f"### Question {q_num}: {q_data['category']}")
         st.write(q_data['question'])
         
         selected_answer = st.radio(
             f"Select your answer for Question {q_num}:",
             options=q_data['options'],
-            index=st.session_state.quiz_answers.get(q_num, 0),
-            key=f"q_{q_num}",
+            index=section_answers.get(q_num, 0),
+            key=f"q_{section_key}_{q_num}",
             label_visibility="collapsed"
         )
         
-        st.session_state.quiz_answers[q_num] = q_data['options'].index(selected_answer)
+        section_answers[q_num] = q_data['options'].index(selected_answer)
         st.markdown("---")
     
     # Submit button
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if st.button("✅ Submit Quiz", use_container_width=True, type="primary"):
-            st.session_state.quiz_submitted = True
+            st.session_state.quiz_submitted_by_section[selected_section] = True
             st.rerun()
     
     st.markdown("---")
     
     # Display results if submitted
-    if st.session_state.quiz_submitted:
-        st.markdown("### 📊 Quiz Results")
+    if st.session_state.quiz_submitted_by_section[selected_section]:
+        st.markdown(f"### 📊 {selected_section} Section Results")
         
         # Calculate score
         correct_count = 0
         category_scores = {}
         
-        for q_num, q_data in quiz_questions.items():
-            if st.session_state.quiz_answers[q_num] == q_data['correct']:
+        for q_num, q_data in section_questions.items():
+            if section_answers[q_num] == q_data['correct']:
                 correct_count += 1
             
             category = q_data['category']
             if category not in category_scores:
                 category_scores[category] = {'correct': 0, 'total': 0}
             category_scores[category]['total'] += 1
-            if st.session_state.quiz_answers[q_num] == q_data['correct']:
+            if section_answers[q_num] == q_data['correct']:
                 category_scores[category]['correct'] += 1
         
         # Calculate percentage and grade
-        percentage = (correct_count / len(quiz_questions)) * 100
+        percentage = (correct_count / len(section_questions)) * 100
         
         if percentage >= 90:
             grade = "A"
@@ -1542,7 +1787,7 @@ elif st.session_state.current_page == 'quiz':
         # Display overall score
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Score", f"{correct_count}/{len(quiz_questions)}")
+            st.metric("Score", f"{correct_count}/10")
         with col2:
             st.metric("Percentage", f"{percentage:.1f}%")
         with col3:
@@ -1571,12 +1816,12 @@ elif st.session_state.current_page == 'quiz':
         st.markdown("### 🎯 Areas for Improvement")
         
         improvement_areas = []
-        for q_num, q_data in quiz_questions.items():
-            if st.session_state.quiz_answers[q_num] != q_data['correct']:
+        for q_num, q_data in section_questions.items():
+            if section_answers[q_num] != q_data['correct']:
                 improvement_areas.append({
                     'Question': f"Question {q_num}",
                     'Category': q_data['category'],
-                    'Your Answer': q_data['options'][st.session_state.quiz_answers[q_num]],
+                    'Your Answer': q_data['options'][section_answers[q_num]],
                     'Correct Answer': q_data['options'][q_data['correct']]
                 })
         
@@ -1596,9 +1841,9 @@ elif st.session_state.current_page == 'quiz':
             st.success("🎉 Perfect Score! You have mastered all the concepts!")
         
         # Retake button
-        if st.button("🔄 Retake Quiz", use_container_width=True):
-            st.session_state.quiz_submitted = False
-            st.session_state.quiz_answers = {}
+        if st.button(f"🔄 Retake {selected_section} Quiz", use_container_width=True):
+            st.session_state.quiz_submitted_by_section[selected_section] = False
+            st.session_state.quiz_answers_by_section[selected_section] = {}
             st.rerun()
 
 # ========== REFERENCES PAGE ==========
